@@ -1,0 +1,14 @@
+github.com/dave/diskfs v0.0.2 h1:b2aPeraLK3jQjPrP8NA+3+gtb0WpExKppHdkmSiPBqI=
+github.com/dave/diskfs v0.0.2/go.mod h1:UecfIBINfXoBYGJUyqzm2+ZjCs6k31tQYcr5Ie4CYcg=
+github.com/diskfs/go-diskfs v0.0.0-20200313141703-d01478b66d6d h1:pX/y/pTPG+sDjscd8R+bKA+RUN61QzyAJ0rJDpsgRPU=
+github.com/diskfs/go-diskfs v0.0.0-20200313141703-d01478b66d6d/go.mod h1:x7shCYRoIc+XvebaZAnK9x6wsYAS+ExHUjuoZcnO+nc=
+github.com/google/uuid v1.1.1 h1:Gkbcsh/GbpXz7lPftLA3P6TYMwjCLYm83jiFQZF/3gY=
+github.com/google/uuid v1.1.1/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
+github.com/mitchellh/go-fs v0.0.0-20180402235330-b7b9ca407fff h1:bFJ74ac7ZK/jyislqiWdzrnENesFt43sNEBRh1xk/+g=
+github.com/mitchellh/go-fs v0.0.0-20180402235330-b7b9ca407fff/go.mod h1:g7SZj7ABpStq3tM4zqHiVEG5un/DZ1+qJJKO7qx1EvU=
+golang.org/x/sys v0.0.0-20190804053845-51ab0e2deafa h1:KIDDMLT1O0Nr7TSxp8xM5tJcdn8tgyAONntO829og1M=
+golang.org/x/sys v0.0.0-20190804053845-51ab0e2deafa/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
+golang.org/x/sys v0.0.0-20200327173247-9dae0f8f5775 h1:TC0v2RSO1u2kn1ZugjrFXkRZAEaqMN/RW+OTZkBzmLE=
+golang.org/x/sys v0.0.0-20200327173247-9dae0f8f5775/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
+gopkg.in/djherbis/times.v1 v1.2.0 h1:UCvDKl1L/fmBygl2Y7hubXCnY7t4Yj46ZrBFNUipFbM=
+gopkg.in/djherbis/times.v1 v1.2.0/go.mod h1:AQlg6unIsrsCEdQYhTzERy542dz6SFdQFZFv6mUY0P8=
