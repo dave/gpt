@@ -73,67 +73,67 @@ func Main() error {
 
 			section := sections[key]
 
-			for _, routeFolder := range sectionFolder.Folders {
+			for _, trackFolder := range sectionFolder.Folders {
 
-				switch routeFolder.Name {
+				switch trackFolder.Name {
 				case "Varriants (2018)":
-					routeFolder.Name = "Variants (2018)"
+					trackFolder.Name = "Variants (2018)"
 				case "Option 1 (Puerto Montt)":
-					routeFolder.Name = "Option 1 Puerto Montt (0000)"
+					trackFolder.Name = "Option 1 Puerto Montt (0000)"
 				case "Option 2 (Quellon)":
-					routeFolder.Name = "Option 2 Quellon (0000)"
+					trackFolder.Name = "Option 2 Quellon (0000)"
 				}
 
-				route := &Route{
-					Raw:      routeFolder.Name,
+				track := &Track{
+					Raw:      trackFolder.Name,
 					Section:  section,
 					Optional: optional,
 				}
-				section.Routes = append(section.Routes, route)
+				section.Tracks = append(section.Tracks, track)
 
-				if matches := level3FolderName1.FindStringSubmatch(routeFolder.Name); len(matches) != 0 {
+				if matches := level3FolderName1.FindStringSubmatch(trackFolder.Name); len(matches) != 0 {
 					// ^(EXP-)?([A-Z]{2}) \((\d{4})\)$
-					route.Experimental = matches[1] == "EXP-"
-					route.Code = matches[2]
+					track.Experimental = matches[1] == "EXP-"
+					track.Code = matches[2]
 					year, err := strconv.Atoi(matches[3])
 					if err != nil {
-						return fmt.Errorf("decoding year from %q - %q", routeFolder.Name, matches[3])
+						return fmt.Errorf("decoding year from %q - %q", trackFolder.Name, matches[3])
 					}
-					route.Year = year
-				} else if matches := level3FolderName2.FindStringSubmatch(routeFolder.Name); len(matches) != 0 {
+					track.Year = year
+				} else if matches := level3FolderName2.FindStringSubmatch(trackFolder.Name); len(matches) != 0 {
 					// ^Option (\d{1,2}) (.*) \((\d{4}\))$
 					option, err := strconv.Atoi(matches[1])
 					if err != nil {
-						return fmt.Errorf("decoding option number from %q - %q", routeFolder.Name, matches[1])
+						return fmt.Errorf("decoding option number from %q - %q", trackFolder.Name, matches[1])
 					}
-					route.Option = option
-					route.Name = matches[2]
+					track.Option = option
+					track.Name = matches[2]
 					year, err := strconv.Atoi(matches[3])
 					if err != nil {
-						return fmt.Errorf("decoding year from %q - %q", routeFolder.Name, matches[3])
+						return fmt.Errorf("decoding year from %q - %q", trackFolder.Name, matches[3])
 					}
-					route.Year = year
-				} else if matches := level3FolderName3.FindStringSubmatch(routeFolder.Name); len(matches) != 0 {
+					track.Year = year
+				} else if matches := level3FolderName3.FindStringSubmatch(trackFolder.Name); len(matches) != 0 {
 					// ^Varr?iants \((\d{4}\))$
-					route.Variants = true
+					track.Variants = true
 					year, err := strconv.Atoi(matches[1])
 					if err != nil {
-						return fmt.Errorf("decoding year from %q - %q", routeFolder.Name, matches[1])
+						return fmt.Errorf("decoding year from %q - %q", trackFolder.Name, matches[1])
 					}
-					route.Year = year
-				} else if matches := level3FolderName4.FindStringSubmatch(routeFolder.Name); len(matches) != 0 {
+					track.Year = year
+				} else if matches := level3FolderName4.FindStringSubmatch(trackFolder.Name); len(matches) != 0 {
 					// ^Variants$
-					route.Variants = true
+					track.Variants = true
 				} else {
-					return fmt.Errorf("no route folder regex match for %q", routeFolder.Name)
+					return fmt.Errorf("no track folder regex match for %q", trackFolder.Name)
 				}
-				for _, segmentPlacemark := range routeFolder.Placemarks {
+				for _, segmentPlacemark := range trackFolder.Placemarks {
 
 					segment := &Segment{
 						Raw:   segmentPlacemark.Name,
-						Route: route,
+						Track: track,
 					}
-					route.Segments = append(route.Segments, segment)
+					track.Segments = append(track.Segments, segment)
 
 					switch segmentPlacemark.Name {
 					case "RH-MR-V@24H-75.8¦1.7":
@@ -188,17 +188,17 @@ func Main() error {
 							OP: Optional Packrafting Route
 						*/
 						case "RR", "RH", "RP":
-							if segment.Route.Optional {
-								// All regular routes should be in the Regular Tracks folder
+							if segment.Track.Optional {
+								// All regular tracks should be in the Regular Tracks folder
 								return fmt.Errorf("segment %q is in Optional Tracks folder", segment.Raw)
 							}
-							if segment.Route.Code != segment.Code {
-								// All regular routes should be in the correct folder
-								return fmt.Errorf("segment %q is in %q route folder", segment.Raw, segment.Route.Raw)
+							if segment.Track.Code != segment.Code {
+								// All regular tracks should be in the correct folder
+								return fmt.Errorf("segment %q is in %q track folder", segment.Raw, segment.Track.Raw)
 							}
 						case "OH", "OP":
-							if !segment.Route.Optional {
-								// All optional routes should be in the Optional Tracks folder
+							if !segment.Track.Optional {
+								// All optional tracks should be in the Optional Tracks folder
 								return fmt.Errorf("segment %q is not in Optional Tracks folder", segment.Raw)
 							}
 						}
@@ -210,9 +210,9 @@ func Main() error {
 						if err != nil {
 							return fmt.Errorf("decoding section number from %q", segmentPlacemark.Name)
 						}
-						if section != segment.Route.Section.Key.Number || matches[7] != segment.Route.Section.Key.Suffix {
+						if section != segment.Track.Section.Key.Number || matches[7] != segment.Track.Section.Key.Suffix {
 							// TODO: Put this error back in once Jan has updated the input files
-							//fmt.Printf("%q is in %q\n", segment.Raw, segment.Route.Section.Raw)
+							//fmt.Printf("%q is in %q\n", segment.Raw, segment.Track.Section.Raw)
 							//return fmt.Errorf("segment %q has wrong section number", segmentPlacemark.Name)
 						}
 
@@ -223,15 +223,15 @@ func Main() error {
 								return fmt.Errorf("decoding section number from %q", segmentPlacemark.Name)
 							}
 						}
-						if option != segment.Route.Option {
+						if option != segment.Track.Option {
 							// TODO: Put this error back in once Jan has updated the input files
-							//fmt.Printf("incorrect option: %q is in %q\n", segment.Raw, segment.Route.Raw)
-							//return fmt.Errorf("incorrect option %q is in %q", segment.Raw, segment.Route.Raw)
+							//fmt.Printf("incorrect option: %q is in %q\n", segment.Raw, segment.Track.Raw)
+							//return fmt.Errorf("incorrect option %q is in %q", segment.Raw, segment.Track.Raw)
 						}
 
 						segment.Variant = matches[11]
-						if segment.Option == 0 && segment.Variant != "" && !segment.Route.Variants {
-							return fmt.Errorf("%q is not in variants folder %q", segment.Raw, segment.Route.Raw)
+						if segment.Option == 0 && segment.Variant != "" && !segment.Track.Variants {
+							return fmt.Errorf("%q is not in variants folder %q", segment.Raw, segment.Track.Raw)
 						}
 
 						if matches[12] != "" {
@@ -276,7 +276,7 @@ func Main() error {
 		}
 	}
 
-	// Build trails
+	// Build routes
 	for _, key := range keys {
 		section := sections[key]
 		fmt.Println(section.Key.Code())
@@ -286,19 +286,19 @@ func Main() error {
 		if section.Key.Number != 1 {
 			continue
 		}
-		for _, route := range section.Routes {
-			if route.Optional {
+		for _, track := range section.Tracks {
+			if track.Optional {
 				continue
 			}
-			for i, segment := range route.Segments {
-				if len(route.Segments) == 0 {
+			for i, segment := range track.Segments {
+				if len(track.Segments) == 0 {
 					break
 				}
 				if i == 0 {
 					// special case for first segment... both the first and second segments might be reversed
 					// work out four distances between both start and end points of both first and second segments
 					s1 := segment.Locations
-					s2 := route.Segments[i+1].Locations
+					s2 := track.Segments[i+1].Locations
 					ary := []struct {
 						fromStartOfFirstSegment  bool
 						fromStartOfSecondSegment bool
@@ -317,7 +317,7 @@ func Main() error {
 
 					if shortest.dist > 0.05 {
 						// minimum distance is more than 50m
-						return fmt.Errorf("minimum distance between %q and %q is %.0f meters", segment.Raw, route.Segments[i+1].Raw, shortest.dist*1000)
+						return fmt.Errorf("minimum distance between %q and %q is %.0f meters", segment.Raw, track.Segments[i+1].Raw, shortest.dist*1000)
 					}
 					if shortest.fromStartOfFirstSegment {
 						// if the shortest distance is from the start of the first segment, it must be reversed.
@@ -327,7 +327,7 @@ func Main() error {
 					}
 				} else {
 					// subsequent segments are simpler, requiring a simple comparison.
-					s1 := route.Segments[i-1].Locations
+					s1 := track.Segments[i-1].Locations
 					s2 := segment.Locations
 
 					// we calculate the distance between the end of the last segment (which we now know to be in the
@@ -338,7 +338,7 @@ func Main() error {
 					d := math.Min(distanceToStartOfNextSegment, distanceToEndOfNextSegment)
 					if d > 0.05 {
 						// minimum distance is more than 50m
-						return fmt.Errorf("minimum distance between %q and %q is %.0f meters", route.Segments[i-1].Raw, segment.Raw, d*1000)
+						return fmt.Errorf("minimum distance between %q and %q is %.0f meters", track.Segments[i-1].Raw, segment.Raw, d*1000)
 					}
 
 					// If the distance to the end is shorter, this segment should be reversed.
@@ -351,14 +351,14 @@ func Main() error {
 				}
 				//fmt.Println(segment.Raw, len(segment.Line.Locations()))
 			}
-			//fmt.Println(route.Raw)
+			//fmt.Println(track.Raw)
 		}
 	}
 
 	/*
 		for _, id := range keys {
 			fmt.Println(sections[id].Raw)
-			for _, r := range sections[id].Routes {
+			for _, r := range sections[id].Tracks {
 				fmt.Println("-", r.Raw, r.Optional)
 			}
 		}
@@ -373,10 +373,10 @@ type Section struct {
 	Raw         string // raw name of the section folder
 	Key         SectionKey
 	Name        string   // name of the section
-	Routes      []*Route // raw routes from the kml data
-	Hiking      *Trail
-	Packrafting *Trail
-	Optional    map[OptionalKey]*Trail
+	Tracks      []*Track // raw tracks from the kml data
+	Hiking      *Route
+	Packrafting *Route
+	Optional    map[OptionalKey]*Route
 }
 
 type SectionKey struct {
@@ -400,40 +400,40 @@ func (k OptionalKey) Code() string {
 	return k.Variant
 }
 
-// Trail is a continuous path composed of several adjoining segments (maybe from different routes)
-type Trail struct {
+// Route is a continuous path composed of several adjoining segments (maybe from different tracks)
+type Route struct {
 	*Section
-	Name     string // route name for optional routes
+	Name     string // track name for optional tracks
 	Segments []*Segment
 }
 
-// Route is a route folder inn a section folder
-type Route struct {
+// Track is a track folder in a section folder
+type Track struct {
 	*Section
-	Raw          string // raw name of the route folder
+	Raw          string // raw name of the track folder
 	Optional     bool   // is this section in the "Optional Tracks" folder?
-	Experimental bool   // route folder has "EXP-" prefix
-	Code         string // route type code - RR: Regular Route, RH: Regular Hiking Route, RP: Regular Packrafting Route, OH: Optional Hiking Route, OP: Optional Packrafting Route
-	Year         int    // year in brackets in the route folder
-	Variants     bool   // route folder is named "Variants"
-	Option       int    // option number if the route folder is named "Option X"
-	Name         string // route name for optional routes
+	Experimental bool   // track folder has "EXP-" prefix
+	Code         string // track type code - RR: Regular Route, RH: Regular Hiking Route, RP: Regular Packrafting Route, OH: Optional Hiking Route, OP: Optional Packrafting Route
+	Year         int    // year in brackets in the track folder
+	Variants     bool   // track folder is named "Variants"
+	Option       int    // option number if the track folder is named "Option X"
+	Name         string // track name for optional tracks
 	Segments     []*Segment
 }
 
-// Segment is a placemark / linestring in a route folder
+// Segment is a placemark / linestring in a track folder
 type Segment struct {
-	*Route
+	*Track
 	Raw          string  // raw name of the placemark
 	Experimental bool    // segment name has "EXP-" prefix
-	Code         string  // route code from the segment name - RR: Regular Route, RH: Regular Hiking Route, RP: Regular Packrafting Route, OH: Optional Hiking Route, OP: Optional Packrafting Route
+	Code         string  // track code from the segment name - RR: Regular Route, RH: Regular Hiking Route, RP: Regular Packrafting Route, OH: Optional Hiking Route, OP: Optional Packrafting Route
 	Terrain      string  // terrain code from segment name - BB: Bush Bashing, CC: Cross Country, MR: Minor Road, PR: Primary or Paved Road, TL: Horse or Hiking Trail, FJ: Fjord Packrafting, LK: Lake Packrafting, RI: River Packrafting
 	Verification string  // verification status - V: Verified Route, A: Approximate Route, I: Investigation Route
 	Directional  string  // directional status - 1: One-Way Route, 2: Two-Way Route
 	Variant      string  // variant from segment name
-	Count        int     // counter for optional routes
-	From         float64 // from km for regular routes
-	Length       float64 // length km for regular routes
+	Count        int     // counter for optional track
+	From         float64 // from km for regular track
+	Length       float64 // length km for regular track
 	Name         string  // named feature
 	Line         kml.LineString
 	Locations    []kml.Location
