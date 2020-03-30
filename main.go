@@ -3,6 +3,7 @@ package main
 import (
 	"archive/zip"
 	"encoding/xml"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -279,79 +280,61 @@ func Main() error {
 	// Build routes
 	for _, key := range keys {
 		section := sections[key]
-		fmt.Println(section.Key.Code())
+		// build a list of segments for hiking route
+		var hasHiking, hasPackrafting bool
+		if section.Key.Suffix == "P" {
+			hasPackrafting = true
+		} else if section.Key.Suffix == "H" {
+			hasHiking = true
+		} else {
+			hasHiking = true
+		}
+		// Regular sections sometimes have a hiking / packrafting route without having the prefix. We need to search
+		// the tracks to find out.
+		for _, track := range section.Tracks {
+			// Regular sections without H or P suffix may have packrafting tracks. Scan to find out.
+			if track.Code == "RP" {
+				// RR: Regular Route, RH: Regular Hiking Route, RP: Regular Packrafting Route, OH: Optional Hiking Route, OP: Optional Packrafting Route
+				hasPackrafting = true
+			}
+			if track.Code == "RH" {
+				// RR: Regular Route, RH: Regular Hiking Route, RP: Regular Packrafting Route, OH: Optional Hiking Route, OP: Optional Packrafting Route
+				hasHiking = true
+			}
+		}
+
+		collect := func(route *Route, code string) {
+			for _, track := range section.Tracks {
+				// RR: Regular Route, RH: Regular Hiking Route, RP: Regular Packrafting Route, OH: Optional Hiking Route, OP: Optional Packrafting Route
+				if track.Code == "RR" || track.Code == code {
+					for _, segment := range track.Segments {
+						route.Segments = append(route.Segments, segment)
+					}
+				}
+			}
+			// order the segments by From km
+			sort.Slice(route.Segments, func(i, j int) bool { return route.Segments[i].From < route.Segments[j].From })
+		}
+		if hasHiking {
+			section.Hiking = &Route{Section: section, Hiking: true}
+			collect(section.Hiking, "RH")
+		}
+		if hasPackrafting {
+			section.Packrafting = &Route{Section: section, Packrafting: true}
+			collect(section.Packrafting, "RP")
+		}
 	}
 
 	for _, section := range sections {
-		if section.Key.Number != 1 {
-			continue
+		if section.Hiking != nil {
+			if err := section.Hiking.Normalise(); err != nil {
+				return fmt.Errorf("normalising GPT%v regular hiking route: %w", section.Key.Code(), err)
+			}
 		}
-		for _, track := range section.Tracks {
-			if track.Optional {
-				continue
+		if section.Packrafting != nil {
+			if err := section.Packrafting.Normalise(); err != nil {
+				return fmt.Errorf("normalising GPT%v regular packrafting route: %w", section.Key.Code(), err)
 			}
-			for i, segment := range track.Segments {
-				if len(track.Segments) == 0 {
-					break
-				}
-				if i == 0 {
-					// special case for first segment... both the first and second segments might be reversed
-					// work out four distances between both start and end points of both first and second segments
-					s1 := segment.Locations
-					s2 := track.Segments[i+1].Locations
-					ary := []struct {
-						fromStartOfFirstSegment  bool
-						fromStartOfSecondSegment bool
-						dist                     float64
-					}{
-						{true, true, s1[0].Distance(s2[0])},                   // distance between start of first segment and start of second segment
-						{true, false, s1[0].Distance(s2[len(s2)-1])},          // distance between start of first segment and end of second segment
-						{false, true, s1[len(s1)-1].Distance(s2[0])},          // distance between end of first segment and start of second segment
-						{false, false, s1[len(s1)-1].Distance(s2[len(s2)-1])}, // distance between end of first segment and end of second segment
-					}
-
-					// find shortest of these distances
-					sort.Slice(ary, func(i, j int) bool { return ary[i].dist < ary[j].dist })
-
-					shortest := ary[0]
-
-					if shortest.dist > 0.05 {
-						// minimum distance is more than 50m
-						return fmt.Errorf("minimum distance between %q and %q is %.0f meters", segment.Raw, track.Segments[i+1].Raw, shortest.dist*1000)
-					}
-					if shortest.fromStartOfFirstSegment {
-						// if the shortest distance is from the start of the first segment, it must be reversed.
-						//fmt.Printf("segment %d: %v is reversed\n", i, segment.Raw)
-						segment.Line.Coordinates = segment.Line.Reverse()
-						segment.Locations = segment.Line.Locations()
-					}
-				} else {
-					// subsequent segments are simpler, requiring a simple comparison.
-					s1 := track.Segments[i-1].Locations
-					s2 := segment.Locations
-
-					// we calculate the distance between the end of the last segment (which we now know to be in the
-					// correct orientation) and both the start and end of the current section.
-					distanceToStartOfNextSegment := s1[len(s1)-1].Distance(s2[0])
-					distanceToEndOfNextSegment := s1[len(s1)-1].Distance(s2[len(s2)-1])
-
-					d := math.Min(distanceToStartOfNextSegment, distanceToEndOfNextSegment)
-					if d > 0.05 {
-						// minimum distance is more than 50m
-						return fmt.Errorf("minimum distance between %q and %q is %.0f meters", track.Segments[i-1].Raw, segment.Raw, d*1000)
-					}
-
-					// If the distance to the end is shorter, this segment should be reversed.
-					if distanceToEndOfNextSegment < distanceToStartOfNextSegment {
-						// next segment is reversed
-						//fmt.Printf("segment %d: %v is reversed\n", i, segment.Raw)
-						segment.Line.Coordinates = segment.Line.Reverse()
-						segment.Locations = segment.Line.Locations()
-					}
-				}
-				//fmt.Println(segment.Raw, len(segment.Line.Locations()))
-			}
-			//fmt.Println(track.Raw)
 		}
 	}
 
@@ -403,8 +386,214 @@ func (k OptionalKey) Code() string {
 // Route is a continuous path composed of several adjoining segments (maybe from different tracks)
 type Route struct {
 	*Section
-	Name     string // track name for optional tracks
-	Segments []*Segment
+	Hiking, Packrafting bool
+	Optional            OptionalKey
+	Name                string // track name for optional tracks
+	Segments            []*Segment
+}
+
+// Normalise finds the first segment (using name data), reorders the other segments and reverses them when needed.
+func (r *Route) Normalise() error {
+	if len(r.Segments) < 2 {
+		// can't normalise a single segment
+		return nil
+	}
+	findClosest := func(current *Segment, from kml.Location, exclude map[*Segment]bool) (segment *Segment, start bool, dist float64, err error) {
+
+		hardCoded := map[string]string{
+			"RP-MR-V@29P-120.2+8.4": "RP-MR-V@29P-5.6+4.3",
+		}
+
+		collection := r.Segments
+
+		if hardCoded[current.Raw] != "" {
+			// we have a hardcoded next segment
+			for _, s := range r.Segments {
+				if s.Raw == hardCoded[current.Raw] {
+					collection = []*Segment{s}
+					break
+				}
+			}
+		}
+
+		type data struct {
+			segment *Segment
+			start   bool
+			dist    float64
+		}
+		var measurements []data
+		for _, s := range collection {
+			if exclude[s] {
+				continue
+			}
+			measurements = append(measurements, data{s, true, from.Distance(s.Start())})
+			measurements = append(measurements, data{s, false, from.Distance(s.End())})
+		}
+
+		sort.Slice(measurements, func(i, j int) bool { return measurements[i].dist < measurements[j].dist })
+
+		closeSegments := map[*Segment]data{}
+		for _, measurement := range measurements {
+			if measurement.dist > 0.05 {
+				break
+			}
+			if closeSegments[measurement.segment].segment == nil || closeSegments[measurement.segment].dist > measurement.dist {
+				closeSegments[measurement.segment] = measurement
+			}
+		}
+		if len(closeSegments) > 1 {
+			var segmentsInSameTrack []*Segment
+			for s := range closeSegments {
+				if current.Track == s.Track {
+					segmentsInSameTrack = append(segmentsInSameTrack, s)
+				}
+			}
+			if len(segmentsInSameTrack) == 0 {
+				// are all the close segments in the same track (but different to current)?
+				allSameTrack := true
+				var first *Segment
+				for s := range closeSegments {
+					if first == nil {
+						first = s
+					}
+					if s.Track != first.Track {
+						allSameTrack = false
+						break
+					}
+				}
+				if allSameTrack {
+					for s := range closeSegments {
+						segmentsInSameTrack = append(segmentsInSameTrack, s)
+					}
+				}
+			}
+			if len(segmentsInSameTrack) == 0 {
+				message := fmt.Sprintf("%q has %d nearby segments (none in same track):", current.Raw, len(closeSegments))
+				for s := range closeSegments {
+					message += fmt.Sprintf(" %q", s.Raw)
+				}
+				return nil, false, 0.0, errors.New(message)
+			}
+			sort.Slice(segmentsInSameTrack, func(i, j int) bool { return segmentsInSameTrack[i].Index() < segmentsInSameTrack[j].Index() })
+			if current.Track == segmentsInSameTrack[0].Track && current.Index() > segmentsInSameTrack[0].Index() {
+				message := fmt.Sprintf("%q has %d nearby segments (none in same track with higher index):", current.Raw, len(closeSegments))
+				for s := range closeSegments {
+					message += fmt.Sprintf(" %q", s.Raw)
+				}
+				return nil, false, 0.0, errors.New(message)
+			}
+			measurement := closeSegments[segmentsInSameTrack[0]]
+			return measurement.segment, measurement.start, measurement.dist, nil
+		}
+
+		if len(measurements) == 0 {
+			return nil, false, 0.0, fmt.Errorf("can't find close segment for %q", current.Raw)
+		}
+
+		return measurements[0].segment, measurements[0].start, measurements[0].dist, nil
+	}
+	findFirst := func() *Segment {
+
+		var special string
+		switch {
+		case r.Section.Key.Number == 22 && r.Hiking:
+			special = "RH-PR-V@22-115.8+4.3"
+		case r.Section.Key.Number == 22 && r.Packrafting:
+			special = "RP-MR-V@22-90.0+0.5"
+		case r.Section.Key.Code() == "29P":
+			special = "RP-FJ-2@29P-190.3+2.2"
+		}
+		if special != "" {
+			for _, segment := range r.Segments {
+				if segment.Raw == special {
+					return segment
+				}
+			}
+		}
+
+		for _, segment := range r.Segments {
+			if segment.From == 0 && segment.Length > 0 {
+				return segment
+			}
+			if segment.Option > 0 && segment.Count == 1 {
+				return segment
+			}
+			if segment.Variant != "" && segment.Count == 1 {
+				return segment
+			}
+		}
+		return nil
+	}
+	used := map[*Segment]bool{}
+	var segments []*Segment
+
+	first := findFirst()
+
+	used[first] = true
+	segments = append(segments, first)
+
+	// first might need reversing
+	_, _, distFromStart, err := findClosest(first, first.Start(), used)
+	if err != nil {
+		return err
+	}
+	_, _, distFromEnd, err := findClosest(first, first.End(), used)
+	if err != nil {
+		return err
+	}
+
+	if math.Min(distFromStart, distFromEnd) > 0.05 {
+		return fmt.Errorf("closest segment to %q is %.0f m away", first.Raw, math.Min(distFromStart, distFromEnd)*1000)
+	}
+
+	if distFromStart < distFromEnd {
+		// reverse the segment
+		//fmt.Printf("Reversing: %s\n", first.Raw)
+		first.Line.Coordinates = first.Line.Reverse()
+		first.Locations = first.Line.Locations()
+	}
+
+	current := first
+
+	for len(segments) != len(r.Segments) {
+		next, start, dist, err := findClosest(current, current.End(), used)
+		if err != nil {
+			return err
+		}
+		if dist > 0.05 {
+
+			// TODO: remove special cases
+			switch next.Raw {
+			case "EXP-RP-RI-2@90P-152.3+7.6":
+			case "RP-LK-1@37P-5.3+1.8":
+			// ignore
+			default:
+				//fmt.Printf("closest segment to %q is %q - %.0f m away\n", current.Raw, next.Raw, dist*1000)
+				return fmt.Errorf("closest segment to %q is %q - %.0f m away", current.Raw, next.Raw, dist*1000)
+			}
+
+		}
+		if !start {
+			// reverse the next segment
+			//fmt.Printf("Reversing: %s\n", next.Raw)
+			next.Line.Coordinates = next.Line.Reverse()
+			next.Locations = next.Line.Locations()
+		}
+		used[next] = true
+		segments = append(segments, next)
+
+		if next.Raw == "RP-PR-V@29P-111.6+2.9" {
+			// TODO: Remove this special case
+			// There is a branch in 29P so  "RP-MR-V@29P-0.0+5.6" will be left over when we reach the end of the route
+			break
+		}
+
+		current = next
+
+	}
+
+	r.Segments = segments
+	return nil
 }
 
 // Track is a track folder in a section folder
@@ -437,6 +626,26 @@ type Segment struct {
 	Name         string  // named feature
 	Line         kml.LineString
 	Locations    []kml.Location
+}
+
+// Index in the track folder
+func (s *Segment) Index() int {
+	for i, segment := range s.Track.Segments {
+		if s == segment {
+			return i
+		}
+	}
+	panic("can't find segment in track")
+}
+
+// Start is the first location in the kml linestring
+func (s Segment) Start() kml.Location {
+	return s.Locations[0]
+}
+
+// End is the last location in the kml linestring
+func (s Segment) End() kml.Location {
+	return s.Locations[len(s.Locations)-1]
 }
 
 var level2FolderName = regexp.MustCompile(`^GPT(\d{2})([HP]?)-(.*)$`)
