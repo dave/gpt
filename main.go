@@ -5,11 +5,13 @@ import (
 	"encoding/xml"
 	"flag"
 	"fmt"
-	"gpt/kml"
 	"log"
+	"math"
 	"regexp"
 	"sort"
 	"strconv"
+
+	"github.com/dave/gpt/kml"
 )
 
 func main() {
@@ -29,7 +31,6 @@ func Main() error {
 		return fmt.Errorf("opening %q: %w", *input, err)
 	}
 
-	fmt.Println(zrc.File[0].Name)
 	frc, err := zrc.File[0].Open()
 	if err != nil {
 		return fmt.Errorf("unzipping %q: %w", *input, err)
@@ -40,17 +41,12 @@ func Main() error {
 		return fmt.Errorf("decoding %q: %w", *input, err)
 	}
 
-	var sections []*Section
+	var keys []SectionKey
+	sections := map[SectionKey]*Section{}
 
 	for _, rootFolder := range root.Document.Folders[0].Folders {
 		optional := rootFolder.Name == "Optional Tracks"
 		for _, sectionFolder := range rootFolder.Folders {
-
-			section := &Section{
-				Raw:      sectionFolder.Name,
-				Optional: optional,
-			}
-			sections = append(sections, section)
 
 			// ^GPT(\d{2})([HP]?)-(PN )?(.*)$
 			matches := level2FolderName.FindStringSubmatch(sectionFolder.Name)
@@ -59,13 +55,23 @@ func Main() error {
 				return fmt.Errorf("section folder regex match for %q", sectionFolder.Name)
 			}
 
-			id, err := strconv.Atoi(matches[1])
+			number, err := strconv.Atoi(matches[1])
 			if err != nil {
 				return fmt.Errorf("decoding section number for %q: %w", sectionFolder.Name, err)
 			}
-			section.Section = id
-			section.Suffix = matches[2]
-			section.Name = matches[3]
+			suffix := matches[2]
+			key := SectionKey{number, suffix}
+
+			if sections[key] == nil {
+				keys = append(keys, key)
+				sections[key] = &Section{
+					Raw:  sectionFolder.Name,
+					Key:  SectionKey{number, suffix},
+					Name: matches[3],
+				}
+			}
+
+			section := sections[key]
 
 			for _, routeFolder := range sectionFolder.Folders {
 
@@ -79,8 +85,9 @@ func Main() error {
 				}
 
 				route := &Route{
-					Raw:     routeFolder.Name,
-					Section: section,
+					Raw:      routeFolder.Name,
+					Section:  section,
+					Optional: optional,
 				}
 				section.Routes = append(section.Routes, route)
 
@@ -181,7 +188,7 @@ func Main() error {
 							OP: Optional Packrafting Route
 						*/
 						case "RR", "RH", "RP":
-							if segment.Route.Section.Optional {
+							if segment.Route.Optional {
 								// All regular routes should be in the Regular Tracks folder
 								return fmt.Errorf("segment %q is in Optional Tracks folder", segment.Raw)
 							}
@@ -190,7 +197,7 @@ func Main() error {
 								return fmt.Errorf("segment %q is in %q route folder", segment.Raw, segment.Route.Raw)
 							}
 						case "OH", "OP":
-							if !segment.Route.Section.Optional {
+							if !segment.Route.Optional {
 								// All optional routes should be in the Optional Tracks folder
 								return fmt.Errorf("segment %q is not in Optional Tracks folder", segment.Raw)
 							}
@@ -203,7 +210,7 @@ func Main() error {
 						if err != nil {
 							return fmt.Errorf("decoding section number from %q", segmentPlacemark.Name)
 						}
-						if section != segment.Route.Section.Section || matches[7] != segment.Route.Section.Suffix {
+						if section != segment.Route.Section.Key.Number || matches[7] != segment.Route.Section.Key.Suffix {
 							// TODO: Put this error back in once Jan has updated the input files
 							//fmt.Printf("%q is in %q\n", segment.Raw, segment.Route.Section.Raw)
 							//return fmt.Errorf("segment %q has wrong section number", segmentPlacemark.Name)
@@ -269,74 +276,142 @@ func Main() error {
 		}
 	}
 
+	// Build trails
+	for _, key := range keys {
+		section := sections[key]
+		fmt.Println(section.Key.Code())
+	}
+
 	for _, section := range sections {
-		if section.Section == 1 && !section.Optional {
-			for _, route := range section.Routes {
-				for i, segment := range route.Segments {
-					if len(route.Segments) == 0 {
-						break
-					}
-					if i == 0 {
-						// special case for first segment... it might be reversed.
-						// work out distance between start and end points of segment 0 and 1
-						s1 := segment.Locations
-						s2 := route.Segments[i+1].Locations
-						ary := []struct {
-							start1, start2 bool
-							dist           float64
-						}{
-							{true, true, s1[0].Distance(s2[0])},
-							{true, false, s1[0].Distance(s2[len(s2)-1])},
-							{false, true, s1[len(s1)-1].Distance(s2[0])},
-							{false, false, s1[len(s1)-1].Distance(s2[len(s2)-1])},
-						}
-						//for _, s := range ary {
-						//	fmt.Printf("%#v\n", s)
-						//}
-						sort.Slice(ary, func(i, j int) bool { return ary[i].dist < ary[j].dist })
-						if ary[0].start1 {
-							// first segment is reversed
-							fmt.Printf("segment %d: %v is reversed\n", i, segment.Raw)
-							segment.Line.Coordinates = segment.Line.Reverse()
-							segment.Locations = segment.Line.Locations()
-						}
-					} else {
-						s1 := route.Segments[i-1].Locations
-						s2 := segment.Locations
-						start := s1[len(s1)-1].Distance(s2[0])
-						end := s1[len(s1)-1].Distance(s2[len(s2)-1])
-						if end < start {
-							// this segment is reversed
-							fmt.Printf("segment %d: %v is reversed\n", i, segment.Raw)
-							segment.Line.Coordinates = segment.Line.Reverse()
-							segment.Locations = segment.Line.Locations()
-						}
-					}
-					//fmt.Println(segment.Raw, len(segment.Line.Locations()))
-				}
-				//fmt.Println(route.Raw)
+		if section.Key.Number != 1 {
+			continue
+		}
+		for _, route := range section.Routes {
+			if route.Optional {
+				continue
 			}
+			for i, segment := range route.Segments {
+				if len(route.Segments) == 0 {
+					break
+				}
+				if i == 0 {
+					// special case for first segment... both the first and second segments might be reversed
+					// work out four distances between both start and end points of both first and second segments
+					s1 := segment.Locations
+					s2 := route.Segments[i+1].Locations
+					ary := []struct {
+						fromStartOfFirstSegment  bool
+						fromStartOfSecondSegment bool
+						dist                     float64
+					}{
+						{true, true, s1[0].Distance(s2[0])},                   // distance between start of first segment and start of second segment
+						{true, false, s1[0].Distance(s2[len(s2)-1])},          // distance between start of first segment and end of second segment
+						{false, true, s1[len(s1)-1].Distance(s2[0])},          // distance between end of first segment and start of second segment
+						{false, false, s1[len(s1)-1].Distance(s2[len(s2)-1])}, // distance between end of first segment and end of second segment
+					}
+
+					// find shortest of these distances
+					sort.Slice(ary, func(i, j int) bool { return ary[i].dist < ary[j].dist })
+
+					shortest := ary[0]
+
+					if shortest.dist > 0.05 {
+						// minimum distance is more than 50m
+						return fmt.Errorf("minimum distance between %q and %q is %.0f meters", segment.Raw, route.Segments[i+1].Raw, shortest.dist*1000)
+					}
+					if shortest.fromStartOfFirstSegment {
+						// if the shortest distance is from the start of the first segment, it must be reversed.
+						//fmt.Printf("segment %d: %v is reversed\n", i, segment.Raw)
+						segment.Line.Coordinates = segment.Line.Reverse()
+						segment.Locations = segment.Line.Locations()
+					}
+				} else {
+					// subsequent segments are simpler, requiring a simple comparison.
+					s1 := route.Segments[i-1].Locations
+					s2 := segment.Locations
+
+					// we calculate the distance between the end of the last segment (which we now know to be in the
+					// correct orientation) and both the start and end of the current section.
+					distanceToStartOfNextSegment := s1[len(s1)-1].Distance(s2[0])
+					distanceToEndOfNextSegment := s1[len(s1)-1].Distance(s2[len(s2)-1])
+
+					d := math.Min(distanceToStartOfNextSegment, distanceToEndOfNextSegment)
+					if d > 0.05 {
+						// minimum distance is more than 50m
+						return fmt.Errorf("minimum distance between %q and %q is %.0f meters", route.Segments[i-1].Raw, segment.Raw, d*1000)
+					}
+
+					// If the distance to the end is shorter, this segment should be reversed.
+					if distanceToEndOfNextSegment < distanceToStartOfNextSegment {
+						// next segment is reversed
+						//fmt.Printf("segment %d: %v is reversed\n", i, segment.Raw)
+						segment.Line.Coordinates = segment.Line.Reverse()
+						segment.Locations = segment.Line.Locations()
+					}
+				}
+				//fmt.Println(segment.Raw, len(segment.Line.Locations()))
+			}
+			//fmt.Println(route.Raw)
 		}
 	}
 
-	fmt.Println("gpt", root.Document.Name)
+	/*
+		for _, id := range keys {
+			fmt.Println(sections[id].Raw)
+			for _, r := range sections[id].Routes {
+				fmt.Println("-", r.Raw, r.Optional)
+			}
+		}
+	*/
+
+	//fmt.Println("gpt", root.Document.Name)
 	return nil
 }
 
 // Section is a section folder
 type Section struct {
-	Raw      string // raw name of the section folder
-	Optional bool   // is this section in the "Optional Tracks" folder?
-	Section  int    // section number
-	Suffix   string // section number suffix e.g. H = Hiking, P = Packrafting
-	Name     string // name of the section
-	Routes   []*Route
+	Raw         string // raw name of the section folder
+	Key         SectionKey
+	Name        string   // name of the section
+	Routes      []*Route // raw routes from the kml data
+	Hiking      *Trail
+	Packrafting *Trail
+	Optional    map[OptionalKey]*Trail
+}
+
+type SectionKey struct {
+	Number int
+	Suffix string
+}
+
+func (k SectionKey) Code() string {
+	return fmt.Sprintf("%02d%s", k.Number, k.Suffix)
+}
+
+type OptionalKey struct {
+	Option  int
+	Variant string
+}
+
+func (k OptionalKey) Code() string {
+	if k.Option > 0 {
+		return fmt.Sprintf("%02d%s", k.Option, k.Variant)
+	}
+	return k.Variant
+}
+
+// Trail is a continuous path composed of several adjoining segments (maybe from different routes)
+type Trail struct {
+	*Section
+	Name     string // route name for optional routes
+	Segments []*Segment
 }
 
 // Route is a route folder inn a section folder
 type Route struct {
 	*Section
 	Raw          string // raw name of the route folder
+	Optional     bool   // is this section in the "Optional Tracks" folder?
 	Experimental bool   // route folder has "EXP-" prefix
 	Code         string // route type code - RR: Regular Route, RH: Regular Hiking Route, RP: Regular Packrafting Route, OH: Optional Hiking Route, OP: Optional Packrafting Route
 	Year         int    // year in brackets in the route folder
