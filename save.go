@@ -10,19 +10,21 @@ import (
 
 func saveRoutes(data *Data, dpath string) error {
 	type clusterStruct struct {
+		name     string
 		from, to int
 		modes    map[string]map[string]*gpx.Root
 	}
 	newContents := func() map[string]*gpx.Root {
-		return map[string]*gpx.Root{"regular": {}, "options": {}, "markers": {}, "waypoints": {}}
+		return map[string]*gpx.Root{"routes": {}, "options": {}, "markers": {}, "waypoints": {}}
 	}
 	newModes := func() map[string]map[string]*gpx.Root {
 		return map[string]map[string]*gpx.Root{"hiking": newContents(), "packrafting": newContents()}
 	}
 	clusters := []clusterStruct{
-		{from: 1, to: 16, modes: newModes()},
-		{from: 17, to: 40, modes: newModes()},
-		{from: 41, to: 99, modes: newModes()},
+		{name: "north", from: 1, to: 16, modes: newModes()},
+		{name: "south", from: 17, to: 39, modes: newModes()},
+		{name: "extensions", from: 40, to: 99, modes: newModes()},
+		{name: "all", from: 1, to: 99, modes: newModes()},
 	}
 
 	for _, cluster := range clusters {
@@ -101,11 +103,8 @@ func saveRoutes(data *Data, dpath string) error {
 					contents["options"].Tracks = append(contents["options"].Tracks, alternatives)
 				}
 				rte.Points = gpx.LinePoints(geo.MergeLines(lines))
-				contents["regular"].Routes = append(contents["regular"].Routes, rte)
+				contents["routes"].Routes = append(contents["routes"].Routes, rte)
 
-				//optionsSummaryTrack := gpx.Track{
-				//	Name: fmt.Sprintf("GPT%s options", section.Key.Code()),
-				//}
 				for _, route := range bundle.Options {
 					var trk gpx.Track
 					if route.Key.Option == 0 {
@@ -115,13 +114,11 @@ func saveRoutes(data *Data, dpath string) error {
 					}
 					for _, segment := range route.Segments {
 						trk.Segments = append(trk.Segments, gpx.TrackSegment{Points: gpx.LineTrackPoints(segment.Line)})
-						//optionsSummaryTrack.Segments = append(optionsSummaryTrack.Segments, gpx.TrackSegment{Points: gpx.LineTrackPoints(segment.Line)})
 						trk.Desc += segment.Description() + "\n"
 					}
 
 					contents["options"].Tracks = append(contents["options"].Tracks, trk)
 				}
-				//regular.Tracks = append(regular.Tracks, optionsSummaryTrack)
 
 				for key, waypoints := range data.Waypoints {
 					if key != section.Key {
@@ -160,7 +157,7 @@ func saveRoutes(data *Data, dpath string) error {
 								Desc:  desc,
 							}
 							if node.Option == "" {
-								cluster.modes[mode]["regular"].Waypoints = append(cluster.modes[mode]["regular"].Waypoints, wp)
+								cluster.modes[mode]["routes"].Waypoints = append(cluster.modes[mode]["routes"].Waypoints, wp)
 							} else {
 								cluster.modes[mode]["options"].Waypoints = append(cluster.modes[mode]["options"].Waypoints, wp)
 							}
@@ -174,7 +171,7 @@ func saveRoutes(data *Data, dpath string) error {
 	for _, cluster := range clusters {
 		for mode, modeMap := range cluster.modes {
 			for contents, root := range modeMap {
-				name := fmt.Sprintf("GPT%02d-%02d-%s-%s.gpx", cluster.from, cluster.to, mode, contents)
+				name := fmt.Sprintf("%s-%s-%s.gpx", cluster.name, mode, contents)
 				if err := root.Save(filepath.Join(dpath, name)); err != nil {
 					return fmt.Errorf("writing gpx")
 				}

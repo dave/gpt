@@ -364,7 +364,7 @@ func scanKml(tracksRoot, pointsRoot kml.Root, elevation bool) (*Data, error) {
 							for i := range segment.Line {
 								elevation, err := SrtmClient.GetElevation(http.DefaultClient, segment.Line[i].Lat, segment.Line[i].Lon)
 								if err != nil {
-									panic(err.Error())
+									return nil, fmt.Errorf("looking up elevation for %q: %w", segment.Raw, err)
 								}
 								segment.Line[i].Ele = elevation
 							}
@@ -376,6 +376,41 @@ func scanKml(tracksRoot, pointsRoot kml.Root, elevation bool) (*Data, error) {
 					}
 				}
 			}
+		}
+
+		/*
+			Nodes      []SectionNode // Waypoints marking the start/end of sections
+				Resupplies []Waypoint
+				Important  []Waypoint
+				Waypoints  map[SectionKey][]Waypoint
+		*/
+		waypointElevations := func(waypoints []Waypoint) error {
+			for i, w := range waypoints {
+				elevation, err := SrtmClient.GetElevation(http.DefaultClient, w.Lat, w.Lon)
+				if err != nil {
+					return fmt.Errorf("looking up waypoint elevation: %w", err)
+				}
+				waypoints[i].Ele = elevation
+			}
+			return nil
+		}
+		if err := waypointElevations(data.Resupplies); err != nil {
+			return nil, err
+		}
+		if err := waypointElevations(data.Important); err != nil {
+			return nil, err
+		}
+		for _, waypoints := range data.Waypoints {
+			if err := waypointElevations(waypoints); err != nil {
+				return nil, err
+			}
+		}
+		for i, node := range data.Nodes {
+			elevation, err := SrtmClient.GetElevation(http.DefaultClient, node.Lat, node.Lon)
+			if err != nil {
+				return nil, fmt.Errorf("looking up node elevation: %w", err)
+			}
+			data.Nodes[i].Ele = elevation
 		}
 	}
 	return data, nil
