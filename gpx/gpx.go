@@ -35,7 +35,11 @@ type Root struct {
 }
 
 func (r Root) Save(fpath string) error {
-	bw, err := xml.MarshalIndent(r, "", "\t")
+	wrapper := struct {
+		Root
+		XMLName struct{} `xml:"gpx"`
+	}{Root: r}
+	bw, err := xml.MarshalIndent(wrapper, "", "\t")
 	//bw, err := xml.Marshal(r)
 	if err != nil {
 		return fmt.Errorf("marshing gpx: %w", err)
@@ -62,7 +66,7 @@ type Route struct {
 type Point struct {
 	Lat float64 `xml:"lat,attr"`
 	Lon float64 `xml:"lon,attr"`
-	Ele float64 `xml:"ele"`
+	Ele float64 `xml:"ele,omitempty"`
 }
 
 func PosPoint(p geo.Pos) Point {

@@ -6,10 +6,44 @@ import (
 
 type Line []Pos
 
+func (l Line) Length() float64 {
+	var total float64
+	for i, pos := range l {
+		if i == 0 {
+			continue
+		}
+		total += l[i-1].Distance(pos)
+	}
+	return total
+}
+
 func (l Line) Reverse() {
 	for i, j := 0, len(l)-1; i < j; i, j = i+1, j-1 {
 		l[i], l[j] = l[j], l[i]
 	}
+}
+
+// Start is the first Pos in the line
+func (l Line) Start() Pos {
+	return l[0]
+}
+
+// End is the last Pos in the line
+func (l Line) End() Pos {
+	return l[len(l)-1]
+}
+
+func MergeLines(lines []Line) Line {
+	var totalLen int
+	for _, s := range lines {
+		totalLen += len(s)
+	}
+	tmp := make(Line, totalLen)
+	var i int
+	for _, s := range lines {
+		i += copy(tmp[i:], s)
+	}
+	return tmp
 }
 
 type Pos struct {

@@ -34,7 +34,11 @@ type Root struct {
 }
 
 func (r Root) Save(fpath string) error {
-	bw, err := xml.MarshalIndent(r, "", "\t")
+	wrapper := struct {
+		Root
+		XMLName struct{} `xml:"kml"`
+	}{Root: r}
+	bw, err := xml.MarshalIndent(wrapper, "", "\t")
 	if err != nil {
 		return fmt.Errorf("marshing kml: %w", err)
 	}

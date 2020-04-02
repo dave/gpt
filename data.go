@@ -5,9 +5,33 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strconv"
+	"strings"
 
 	"github.com/dave/gpt/geo"
 )
+
+type Data struct {
+	Keys       []SectionKey
+	Sections   map[SectionKey]*Section
+	Nodes      []SectionNode // Waypoints marking the start/end of sections
+	Resupplies []Waypoint
+	Important  []Waypoint
+	Waypoints  map[SectionKey][]Waypoint
+}
+
+type Waypoint struct {
+	geo.Pos
+	Name string
+}
+
+// SectionNode is the position of the start/end of a section
+type SectionNode struct {
+	geo.Pos
+	Option   string
+	Name     string
+	Sections []SectionKey // One waypoint can be at the start / end of multiple
+}
 
 // Section is a section folder
 type Section struct {
@@ -15,9 +39,14 @@ type Section struct {
 	Key         SectionKey
 	Name        string   // name of the section
 	Tracks      []*Track // raw tracks from the kml data
-	Hiking      *Route
-	Packrafting *Route
-	Optional    map[OptionalKey]*Route
+	Hiking      *Bundle  // If this section has a regular route that does not include packrafting, it's here.
+	Packrafting *Bundle  // This is the regular route for this section with packrafting trails chosen when possible.
+}
+
+type Bundle struct {
+	Regular      *Route                 // The regular route for this section.
+	Alternatives []*Segment             // For packrafting bundles, this is the RH parts of the regular routes (will be included in options). These segments are not continuous.
+	Options      map[OptionalKey]*Route // Options and variants for this section. For the hiking bundle any options with packrafting terrain type are excluded.
 }
 
 type SectionKey struct {
@@ -27,6 +56,26 @@ type SectionKey struct {
 
 func (k SectionKey) Code() string {
 	return fmt.Sprintf("%02d%s", k.Number, k.Suffix)
+}
+
+func NewSectionKey(code string) (SectionKey, error) {
+	var key SectionKey
+	code = strings.TrimSpace(code)
+	code = strings.TrimPrefix(code, "GPT")
+	if strings.HasSuffix(code, "P") {
+		key.Suffix = "P"
+		code = strings.TrimSuffix(code, "P")
+	}
+	if strings.HasSuffix(code, "H") {
+		key.Suffix = "H"
+		code = strings.TrimSuffix(code, "H")
+	}
+	number, err := strconv.Atoi(code)
+	if err != nil {
+		return SectionKey{}, err
+	}
+	key.Number = number
+	return key, nil
 }
 
 type OptionalKey struct {
@@ -45,7 +94,7 @@ func (k OptionalKey) Code() string {
 type Route struct {
 	*Section
 	Hiking, Packrafting bool
-	Optional            OptionalKey
+	Key                 OptionalKey
 	Name                string // track name for optional tracks
 	Segments            []*Segment
 }
@@ -100,8 +149,8 @@ func (r *Route) Normalise() error {
 			if exclude[s] {
 				continue
 			}
-			measurements = append(measurements, data{s, true, from.Distance(s.Start())})
-			measurements = append(measurements, data{s, false, from.Distance(s.End())})
+			measurements = append(measurements, data{s, true, from.Distance(s.Line.Start())})
+			measurements = append(measurements, data{s, false, from.Distance(s.Line.End())})
 		}
 
 		sort.Slice(measurements, func(i, j int) bool { return measurements[i].dist < measurements[j].dist })
@@ -207,11 +256,11 @@ func (r *Route) Normalise() error {
 	segments = append(segments, first)
 
 	// first might need reversing
-	_, _, distFromStart, err := findClosest(first, first.Start(), used)
+	_, _, distFromStart, err := findClosest(first, first.Line.Start(), used)
 	if err != nil {
 		return err
 	}
-	_, _, distFromEnd, err := findClosest(first, first.End(), used)
+	_, _, distFromEnd, err := findClosest(first, first.Line.End(), used)
 	if err != nil {
 		return err
 	}
@@ -229,7 +278,7 @@ func (r *Route) Normalise() error {
 	current := first
 
 	for len(segments) != len(routeSegments) {
-		next, start, dist, err := findClosest(current, current.End(), used)
+		next, start, dist, err := findClosest(current, current.Line.End(), used)
 		if err != nil {
 			return err
 		}
@@ -239,7 +288,7 @@ func (r *Route) Normalise() error {
 			switch {
 			case next.Raw == "EXP-RP-RI-2@90P-152.3+7.6":
 			case next.Raw == "RP-LK-1@37P-5.3+1.8":
-			case r.Section.Key.Code() == "24H" && r.Optional == OptionalKey{0, "A"}:
+			case r.Section.Key.Code() == "24H" && r.Key == OptionalKey{0, "A"}:
 			// ignore
 			default:
 				//fmt.Printf("closest segment to %q is %q - %.0f m away\n", current.Raw, next.Raw, dist*1000)
@@ -283,7 +332,7 @@ type Segment struct {
 	Raw          string  // raw name of the placemark
 	Experimental bool    // segment name has "EXP-" prefix
 	Code         string  // track code from the segment name - RR: Regular Route, RH: Regular Hiking Route, RP: Regular Packrafting Route, OH: Optional Hiking Route, OP: Optional Packrafting Route
-	Terrain      string  // terrain code from segment name - BB: Bush Bashing, CC: Cross Country, MR: Minor Road, PR: Primary or Paved Road, TL: Horse or Hiking Trail, FJ: Fjord Packrafting, LK: Lake Packrafting, RI: River Packrafting
+	Terrain      string  // terrain code from segment name - BB: Bush Bashing, CC: Cross Country, MR: Minor Road, PR: Primary or Paved Road, TL: Horse or Hiking Trail, FJ: Fjord Packrafting, LK: Lake Packrafting, RI: River Packrafting, FY: Ferry
 	Verification string  // verification status - V: Verified Route, A: Approximate Route, I: Investigation Route
 	Directional  string  // directional status - 1: One-Way Route, 2: Two-Way Route
 	Variant      string  // variant from segment name
@@ -294,6 +343,116 @@ type Segment struct {
 	Line         geo.Line
 }
 
+func (s Segment) Description() string {
+	if s.Length > 0 {
+		return s.DescriptionLength(s.Length)
+	}
+	return s.DescriptionLength(s.Line.Length())
+}
+
+func (s Segment) DescriptionLength(length float64) string {
+	var sb strings.Builder
+	if s.Count > 0 {
+		sb.WriteString(fmt.Sprintf("#%03d", s.Count))
+	} else {
+		sb.WriteString(fmt.Sprintf("%.1f", s.From))
+	}
+	sb.WriteString(fmt.Sprintf(" %s", Terrain(s.Terrain)))
+	properties := s.Properties()
+	if len(properties) > 0 {
+		sb.WriteString(fmt.Sprintf(" (%s)", strings.Join(properties, ", ")))
+	}
+	sb.WriteString(fmt.Sprintf(": %.1f km", length))
+	return sb.String()
+}
+
+func (s Segment) Properties() []string {
+	/*
+		var properties []string
+		if s.Verification != "" && s.Verification != "V" {
+			properties = append(properties, strings.ToLower(Verification(s.Verification)))
+		}
+		if s.Directional != "" && s.Directional != "2" {
+			properties = append(properties, strings.ToLower(Directional(s.Directional)))
+		}
+		if s.Experimental {
+			properties = append(properties, "experimental")
+		}
+	*/
+	var properties []string
+	if s.Verification != "" {
+		properties = append(properties, s.Verification)
+	}
+	if s.Directional != "" {
+		properties = append(properties, s.Directional)
+	}
+	if s.Experimental {
+		properties = append(properties, "EXP")
+	}
+	return properties
+}
+
+func (s1 Segment) Similar(s2 *Segment) bool {
+	return s1.Terrain == s2.Terrain &&
+		s1.Verification == s2.Verification &&
+		s1.Directional == s2.Directional &&
+		s1.Experimental == s2.Experimental
+}
+
+func Directional(code string) string {
+	switch code {
+	case "1":
+		return "One-Way"
+	case "2":
+		return "Two-Way"
+	}
+	return ""
+}
+
+func Verification(code string) string {
+	switch code {
+	case "V":
+		return "Verified"
+	case "A":
+		return "Approximate"
+	case "I":
+		return "Investigation"
+	}
+	return ""
+}
+
+func IsPackrafting(terrain string) bool {
+	switch terrain {
+	case "FJ", "LK", "RI":
+		return true
+	}
+	return false
+}
+
+func Terrain(code string) string {
+	switch code {
+	case "BB":
+		return "Bush Bashing"
+	case "CC":
+		return "Cross Country"
+	case "MR":
+		return "Minor Road"
+	case "PR":
+		return "Paved Road"
+	case "TL":
+		return "Trail"
+	case "FJ":
+		return "Fjord"
+	case "LK":
+		return "Lake"
+	case "RI":
+		return "River"
+	case "FY":
+		return "Ferry"
+	}
+	return ""
+}
+
 // Index in the track folder
 func (s *Segment) Index() int {
 	for i, segment := range s.Track.Segments {
@@ -302,14 +461,4 @@ func (s *Segment) Index() int {
 		}
 	}
 	panic("can't find segment in track")
-}
-
-// Start is the first location in the kml linestring
-func (s Segment) Start() geo.Pos {
-	return s.Line[0]
-}
-
-// End is the last location in the kml linestring
-func (s Segment) End() geo.Pos {
-	return s.Line[len(s.Line)-1]
 }
