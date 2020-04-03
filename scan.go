@@ -12,95 +12,8 @@ import (
 
 func scanKml(tracksRoot, pointsRoot kml.Root, elevation bool) (*Data, error) {
 	data := &Data{
-		Keys:      nil,
-		Sections:  map[SectionKey]*Section{},
-		Waypoints: map[SectionKey][]Waypoint{},
-	}
-
-	//var startEndPoints, resupplies, important, waypoints *kml.Folder
-	for _, folder := range pointsRoot.Document.Folders[0].Folders {
-		switch folder.Name {
-		case "Section Start and End Points":
-			for _, inner := range folder.Folders {
-				switch inner.Name {
-				case "Regular Routes":
-					for _, p := range inner.Placemarks {
-						matches := regularNodeName.FindStringSubmatch(p.Name)
-						if len(matches) != 4 {
-							return nil, fmt.Errorf("parsing regular route start/end point %q", p.Name)
-						}
-						r := SectionNode{
-							Name: matches[3],
-							Pos:  p.Point.Pos(),
-						}
-						for _, s := range strings.Split(matches[1], "/") {
-							key, err := NewSectionKey(s)
-							if err != nil {
-								return nil, fmt.Errorf("parsting section key %q from %q: %w", s, p.Name, err)
-							}
-							r.Sections = append(r.Sections, key)
-						}
-						data.Nodes = append(data.Nodes, r)
-					}
-				case "Optional Routes":
-					for _, p := range inner.Placemarks {
-						matches := optionsNodeName.FindStringSubmatch(p.Name)
-						if len(matches) != 5 {
-							return nil, fmt.Errorf("parsing optional route start/end point %q", p.Name)
-						}
-						r := SectionNode{
-							Name:   matches[4],
-							Pos:    p.Point.Pos(),
-							Option: matches[3],
-						}
-						if r.Option == "" {
-							// any optional node without a option code should be A?
-							r.Option = "A"
-						}
-						for _, s := range strings.Split(matches[1], "/") {
-							key, err := NewSectionKey(s)
-							if err != nil {
-								return nil, fmt.Errorf("parsting section key %q from %q: %w", s, p.Name, err)
-							}
-							r.Sections = append(r.Sections, key)
-						}
-						data.Nodes = append(data.Nodes, r)
-					}
-				}
-
-			}
-		case "Resupply Locations":
-			for _, p := range folder.Placemarks {
-				data.Resupplies = append(data.Resupplies, Waypoint{
-					Pos:  p.Point.Pos(),
-					Name: p.Name,
-				})
-			}
-		case "Important Infromation", "Important Information":
-			for _, p := range folder.Placemarks {
-				data.Important = append(data.Important, Waypoint{
-					Pos:  p.Point.Pos(),
-					Name: p.Name,
-				})
-			}
-		case "Waypoints by Section":
-			for _, f := range folder.Folders {
-				matches := waypointSectionFolderName.FindStringSubmatch(f.Name)
-				if len(matches) != 2 {
-					return nil, fmt.Errorf("parsing waypoint folder name %q", f.Name)
-				}
-				key, err := NewSectionKey(matches[1])
-				if err != nil {
-					return nil, fmt.Errorf("parsing section key from %q: %w", matches[1], err)
-				}
-				for _, p := range f.Placemarks {
-					data.Waypoints[key] = append(data.Waypoints[key], Waypoint{
-						Pos:  p.Point.Pos(),
-						Name: strings.TrimSuffix(p.Name, "-"), // all waypoint names end with "-"?
-					})
-				}
-			}
-		}
+		Keys:     nil,
+		Sections: map[SectionKey]*Section{},
 	}
 
 	for _, rootFolder := range tracksRoot.Document.Folders[0].Folders {
@@ -377,13 +290,116 @@ func scanKml(tracksRoot, pointsRoot kml.Root, elevation bool) (*Data, error) {
 				}
 			}
 		}
+	}
 
-		/*
-			Nodes      []SectionNode // Waypoints marking the start/end of sections
-				Resupplies []Waypoint
-				Important  []Waypoint
-				Waypoints  map[SectionKey][]Waypoint
-		*/
+	// TODO: remove this
+	// Waypoints are incorrectly tagged as GPT70P / GPT71P / GPT72P - the track is GPT70 / GPT71 / GPT72
+	removeSuffix := map[int]bool{
+		70: true,
+		71: true,
+		72: true,
+		76: true,
+		77: true,
+		78: true,
+	}
+
+	for _, folder := range pointsRoot.Document.Folders[0].Folders {
+		switch folder.Name {
+		case "Section Start and End Points":
+			for _, inner := range folder.Folders {
+				switch inner.Name {
+				case "Regular Routes":
+					for _, p := range inner.Placemarks {
+						matches := regularNodeName.FindStringSubmatch(p.Name)
+						if len(matches) != 4 {
+							return nil, fmt.Errorf("parsing regular route start/end point %q", p.Name)
+						}
+						r := SectionNode{
+							Raw:  p.Name,
+							Name: matches[3],
+							Pos:  p.Point.Pos(),
+						}
+						for _, s := range strings.Split(matches[1], "/") {
+							key, err := NewSectionKey(s)
+							if err != nil {
+								return nil, fmt.Errorf("parsting section key %q from %q: %w", s, p.Name, err)
+							}
+							if removeSuffix[key.Number] {
+								key.Suffix = ""
+							}
+							r.Sections = append(r.Sections, key)
+						}
+						data.Nodes = append(data.Nodes, r)
+					}
+				case "Optional Routes":
+					for _, p := range inner.Placemarks {
+						matches := optionsNodeName.FindStringSubmatch(p.Name)
+						if len(matches) != 5 {
+							return nil, fmt.Errorf("parsing optional route start/end point %q", p.Name)
+						}
+						r := SectionNode{
+							Raw:    p.Name,
+							Name:   matches[4],
+							Pos:    p.Point.Pos(),
+							Option: matches[3],
+						}
+						if r.Option == "" {
+							// any optional node without a option code should be A?
+							r.Option = "A"
+						}
+						for _, s := range strings.Split(matches[1], "/") {
+							key, err := NewSectionKey(s)
+							if err != nil {
+								return nil, fmt.Errorf("parsting section key %q from %q: %w", s, p.Name, err)
+							}
+							if removeSuffix[key.Number] {
+								key.Suffix = ""
+							}
+							r.Sections = append(r.Sections, key)
+						}
+						data.Nodes = append(data.Nodes, r)
+					}
+				}
+
+			}
+		case "Resupply Locations":
+			for _, p := range folder.Placemarks {
+				data.Resupplies = append(data.Resupplies, Waypoint{
+					Pos:  p.Point.Pos(),
+					Name: p.Name,
+				})
+			}
+		case "Important Infromation", "Important Information":
+			for _, p := range folder.Placemarks {
+				data.Important = append(data.Important, Waypoint{
+					Pos:  p.Point.Pos(),
+					Name: p.Name,
+				})
+			}
+		case "Waypoints by Section":
+			for _, f := range folder.Folders {
+				matches := waypointSectionFolderName.FindStringSubmatch(f.Name)
+				if len(matches) != 2 {
+					return nil, fmt.Errorf("parsing waypoint folder name %q", f.Name)
+				}
+				key, err := NewSectionKey(matches[1])
+				if err != nil {
+					return nil, fmt.Errorf("parsing section key from %q: %w", matches[1], err)
+				}
+				if removeSuffix[key.Number] {
+					key.Suffix = ""
+				}
+				for _, p := range f.Placemarks {
+					data.Sections[key].Waypoints = append(data.Sections[key].Waypoints, Waypoint{
+						Pos:  p.Point.Pos(),
+						Name: strings.TrimSuffix(p.Name, "-"), // all waypoint names end with "-"?
+					})
+				}
+			}
+		}
+	}
+
+	if elevation {
 		waypointElevations := func(waypoints []Waypoint) error {
 			for i, w := range waypoints {
 				elevation, err := SrtmClient.GetElevation(http.DefaultClient, w.Lat, w.Lon)
@@ -400,8 +416,8 @@ func scanKml(tracksRoot, pointsRoot kml.Root, elevation bool) (*Data, error) {
 		if err := waypointElevations(data.Important); err != nil {
 			return nil, err
 		}
-		for _, waypoints := range data.Waypoints {
-			if err := waypointElevations(waypoints); err != nil {
+		for _, section := range data.Sections {
+			if err := waypointElevations(section.Waypoints); err != nil {
 				return nil, err
 			}
 		}
@@ -413,6 +429,7 @@ func scanKml(tracksRoot, pointsRoot kml.Root, elevation bool) (*Data, error) {
 			data.Nodes[i].Ele = elevation
 		}
 	}
+
 	return data, nil
 }
 

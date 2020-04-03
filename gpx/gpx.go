@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/dave/gpt/geo"
@@ -35,6 +37,8 @@ type Root struct {
 }
 
 func (r Root) Save(fpath string) error {
+	dpath, _ := filepath.Split(fpath)
+	_ = os.MkdirAll(dpath, 0777)
 	wrapper := struct {
 		Root
 		XMLName struct{} `xml:"gpx"`
@@ -54,7 +58,7 @@ type Waypoint struct {
 	Point
 	Name string `xml:"name"`
 	Sym  string `xml:"sym,omitempty"`
-	Desc string `xml:"desc"`
+	Desc string `xml:"desc,omitempty"`
 }
 
 type Route struct {

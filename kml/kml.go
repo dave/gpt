@@ -1,11 +1,12 @@
 package kml
 
 import (
-	"bytes"
+	"archive/zip"
 	"encoding/xml"
 	"fmt"
 	"io"
-	"io/ioutil"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -13,11 +14,27 @@ import (
 )
 
 func Load(fpath string) (Root, error) {
-	b, err := ioutil.ReadFile(fpath)
-	if err != nil {
-		return Root{}, fmt.Errorf("reading kml %q: %w", fpath, err)
+	var r io.Reader
+	if strings.HasSuffix(fpath, ".kmz") {
+		zrc, err := zip.OpenReader(fpath)
+		if err != nil {
+			return Root{}, fmt.Errorf("opening %q: %w", fpath, err)
+		}
+		defer zrc.Close()
+		f, err := zrc.File[0].Open()
+		if err != nil {
+			return Root{}, fmt.Errorf("unzipping %q: %w", fpath, err)
+		}
+		r = f
+	} else {
+		f, err := os.Open(fpath)
+		if err != nil {
+			return Root{}, fmt.Errorf("opening %q: %w", fpath, err)
+		}
+		defer f.Close()
+		r = f
 	}
-	return Decode(bytes.NewBuffer(b))
+	return Decode(r)
 }
 
 func Decode(reader io.Reader) (Root, error) {
@@ -34,18 +51,50 @@ type Root struct {
 }
 
 func (r Root) Save(fpath string) error {
+	dpath, _ := filepath.Split(fpath)
+	_ = os.MkdirAll(dpath, 0777)
+
+	var w io.Writer
+	f, err := os.Create(fpath)
+	if err != nil {
+		return fmt.Errorf("creating %q: %w", fpath, err)
+	}
+	defer f.Close()
+	var end func() error
+	if strings.HasSuffix(fpath, ".kmz") {
+		zw := zip.NewWriter(f)
+
+		zf, err := zw.Create("doc.kml")
+		if err != nil {
+			return fmt.Errorf("creating doc.kmz: %w", err)
+		}
+		w = zf
+		end = func() error {
+			if err := zw.Close(); err != nil {
+				return fmt.Errorf("closing zipwriter: %w", err)
+			} else {
+				return nil
+			}
+		}
+	} else {
+		end = func() error { return nil }
+		w = f
+	}
+
+	if _, err := w.Write([]byte(xml.Header)); err != nil {
+		return fmt.Errorf("writing header: %w", err)
+	}
 	wrapper := struct {
 		Root
 		XMLName struct{} `xml:"kml"`
 	}{Root: r}
-	bw, err := xml.MarshalIndent(wrapper, "", "\t")
-	if err != nil {
+	enc := xml.NewEncoder(w)
+	enc.Indent("", "\t")
+	if err := enc.Encode(wrapper); err != nil {
 		return fmt.Errorf("marshing kml: %w", err)
 	}
-	if err := ioutil.WriteFile(fpath, []byte(xml.Header+string(bw)), 0666); err != nil {
-		return fmt.Errorf("writing kml file %q: %w", fpath, err)
-	}
-	return nil
+
+	return end()
 }
 
 type Document struct {
@@ -135,6 +184,10 @@ func LineCoordinates(line geo.Line) string {
 		sb.WriteString(PosCoordinates(pos))
 	}
 	return sb.String()
+}
+
+func PosPoint(pos geo.Pos) *Point {
+	return &Point{Coordinates: PosCoordinates(pos)}
 }
 
 func PosCoordinates(pos geo.Pos) string {

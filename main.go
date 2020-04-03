@@ -1,11 +1,11 @@
 package main
 
 import (
-	"archive/zip"
 	"flag"
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/dave/gpt/kml"
 	"github.com/tkrajina/go-elevations/geoelevations"
@@ -20,11 +20,11 @@ func main() {
 }
 
 func Main() error {
-
 	tracks := flag.String("tracks", "./input/All Tracks.kmz", "all tracks file")
 	points := flag.String("points", "./input/All Points.kmz", "all points file")
 	ele := flag.Bool("ele", true, "lookup elevations")
 	output := flag.String("output", "./output", "output dir")
+	stamp := flag.String("stamp", fmt.Sprintf("%04d%02d%02d", time.Now().Year(), time.Now().Month(), time.Now().Day()), "date stamp for output files")
 	flag.Parse()
 
 	if *ele {
@@ -35,12 +35,12 @@ func Main() error {
 		}
 	}
 
-	tracksRoot, err := loadKmz(*tracks)
+	tracksRoot, err := kml.Load(*tracks)
 	if err != nil {
 		return fmt.Errorf("loading tracks kmz: %w", err)
 	}
 
-	pointsRoot, err := loadKmz(*points)
+	pointsRoot, err := kml.Load(*points)
 	if err != nil {
 		return fmt.Errorf("loading points kmz: %w", err)
 	}
@@ -54,40 +54,20 @@ func Main() error {
 		return fmt.Errorf("building routes: %w", err)
 	}
 
-	if err := saveRoutes(data, *output); err != nil {
-		return fmt.Errorf("saving routes: %w", err)
+	if err := saveGaia(data, *output); err != nil {
+		return fmt.Errorf("saving gaia files: %w", err)
 	}
 
-	/*
-		for _, id := range keys {
-			fmt.Println(sections[id].Raw)
-			for _, r := range sections[id].Tracks {
-				fmt.Println("-", r.Raw, r.Optional)
-			}
-		}
-	*/
+	if err := saveGpx(data, *output, *stamp); err != nil {
+		return fmt.Errorf("saving generic gps files: %w", err)
+	}
 
-	//fmt.Println("gpt", root.Document.Name)
+	if err := saveKmlTracks(data, *output, *stamp); err != nil {
+		return fmt.Errorf("saving generic gps files: %w", err)
+	}
+
+	if err := saveKmlWaypoints(data, *output, *stamp); err != nil {
+		return fmt.Errorf("saving generic gps files: %w", err)
+	}
 	return nil
-}
-
-func loadKmz(fpath string) (kml.Root, error) {
-	zrc, err := zip.OpenReader(fpath)
-	if err != nil {
-		return kml.Root{}, fmt.Errorf("opening %q: %w", fpath, err)
-	}
-
-	defer zrc.Close()
-
-	frc, err := zrc.File[0].Open()
-	if err != nil {
-		return kml.Root{}, fmt.Errorf("unzipping %q: %w", fpath, err)
-	}
-
-	root, err := kml.Decode(frc)
-	if err != nil {
-		return kml.Root{}, fmt.Errorf("decoding kml %q: %w", fpath, err)
-	}
-
-	return root, nil
 }

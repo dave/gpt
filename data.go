@@ -17,7 +17,6 @@ type Data struct {
 	Nodes      []SectionNode // Waypoints marking the start/end of sections
 	Resupplies []Waypoint
 	Important  []Waypoint
-	Waypoints  map[SectionKey][]Waypoint
 }
 
 type Waypoint struct {
@@ -28,9 +27,9 @@ type Waypoint struct {
 // SectionNode is the position of the start/end of a section
 type SectionNode struct {
 	geo.Pos
-	Option   string
-	Name     string
-	Sections []SectionKey // One waypoint can be at the start / end of multiple
+	Option    string
+	Raw, Name string
+	Sections  []SectionKey // One waypoint can be at the start / end of multiple
 }
 
 // Section is a section folder
@@ -41,6 +40,7 @@ type Section struct {
 	Tracks      []*Track // raw tracks from the kml data
 	Hiking      *Bundle  // If this section has a regular route that does not include packrafting, it's here.
 	Packrafting *Bundle  // This is the regular route for this section with packrafting trails chosen when possible.
+	Waypoints   []Waypoint
 }
 
 type Bundle struct {
