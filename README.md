@@ -1,18 +1,36 @@
 # gpt
 
-## install
+Manipulates the route files for the Greater Patagonia Trail.
+
+## Install
+
+### Mac / Linux
+
+Use [homebrew](https://brew.sh/) to install:
 
 ```
 brew install dave/gpt/gpt
 ```
 
-## upgrade
+to upgrade: 
 
 ```
 brew upgrade dave/gpt/gpt
 ```
 
-## run
+### Windows
+
+Download the binary from the [releases page](https://github.com/dave/gpt/releases).
+
+
+## Usage
+
+Create an empty directory, and copy `All Tracks.kmz` and `All Points.kmz` into it. 
+
+Run the `gpt` command in that directory. 
+
+The command will create a new directory `output` with the output files.
+ 
 
 ```
 Usage of gpt:
@@ -21,11 +39,11 @@ Usage of gpt:
   -output string
     	output dir (default "./output")
   -points string
-    	all points file (default "./input/All Points.kmz")
+    	all points file (default "./All Points.kmz")
   -stamp string
     	date stamp for output files (default "20200403")
   -tracks string
-    	all tracks file (default "./input/All Tracks.kmz")
+    	all tracks file (default "./All Tracks.kmz")
   -version
     	show version
 ```

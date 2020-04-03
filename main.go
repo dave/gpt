@@ -23,8 +23,8 @@ func main() {
 
 func Main() error {
 
-	tracks := flag.String("tracks", "./input/All Tracks.kmz", "all tracks file")
-	points := flag.String("points", "./input/All Points.kmz", "all points file")
+	tracks := flag.String("tracks", "./All Tracks.kmz", "all tracks file")
+	points := flag.String("points", "./All Points.kmz", "all points file")
 	ele := flag.Bool("ele", true, "lookup elevations")
 	output := flag.String("output", "./output", "output dir")
 	stamp := flag.String("stamp", fmt.Sprintf("%04d%02d%02d", time.Now().Year(), time.Now().Month(), time.Now().Day()), "date stamp for output files")
