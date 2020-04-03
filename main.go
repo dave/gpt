@@ -13,6 +13,8 @@ import (
 
 var SrtmClient *geoelevations.Srtm
 
+const VERSION = "v0.0.3"
+
 func main() {
 	if err := Main(); err != nil {
 		log.Fatalf("%v", err)
@@ -20,12 +22,19 @@ func main() {
 }
 
 func Main() error {
+
 	tracks := flag.String("tracks", "./input/All Tracks.kmz", "all tracks file")
 	points := flag.String("points", "./input/All Points.kmz", "all points file")
 	ele := flag.Bool("ele", true, "lookup elevations")
 	output := flag.String("output", "./output", "output dir")
 	stamp := flag.String("stamp", fmt.Sprintf("%04d%02d%02d", time.Now().Year(), time.Now().Month(), time.Now().Day()), "date stamp for output files")
+	version := flag.Bool("version", false, "show version")
 	flag.Parse()
+
+	if *version {
+		fmt.Println(VERSION)
+		return nil
+	}
 
 	if *ele {
 		var err error
