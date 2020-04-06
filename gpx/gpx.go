@@ -68,24 +68,36 @@ type Route struct {
 }
 
 type Point struct {
-	Lat float64 `xml:"lat,attr"`
-	Lon float64 `xml:"lon,attr"`
-	Ele float64 `xml:"ele,omitempty"`
+	Lat Degrees `xml:"lat,attr"`
+	Lon Degrees `xml:"lon,attr"`
+	Ele Meters  `xml:"ele,omitempty"`
+}
+
+type Degrees float64
+
+func (d Degrees) MarshalText() ([]byte, error) {
+	return []byte(fmt.Sprintf("%.5f", d)), nil
+}
+
+type Meters float64
+
+func (m Meters) MarshalText() ([]byte, error) {
+	return []byte(fmt.Sprintf("%.0f", m)), nil
 }
 
 func PosPoint(p geo.Pos) Point {
 	return Point{
-		Lat: p.Lat,
-		Lon: p.Lon,
-		Ele: p.Ele,
+		Lat: Degrees(p.Lat),
+		Lon: Degrees(p.Lon),
+		Ele: Meters(p.Ele),
 	}
 }
 
 func (p Point) Pos() geo.Pos {
 	return geo.Pos{
-		Lat: p.Lat,
-		Lon: p.Lon,
-		Ele: p.Ele,
+		Lat: float64(p.Lat),
+		Lon: float64(p.Lon),
+		Ele: float64(p.Ele),
 	}
 }
 

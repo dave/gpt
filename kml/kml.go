@@ -191,7 +191,7 @@ func PosPoint(pos geo.Pos) *Point {
 }
 
 func PosCoordinates(pos geo.Pos) string {
-	return fmt.Sprintf("%v,%v,%v", pos.Lon, pos.Lat, pos.Ele)
+	return fmt.Sprintf("%.5f,%.5f,%.0f", pos.Lon, pos.Lat, pos.Ele)
 }
 
 /*
