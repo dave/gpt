@@ -88,14 +88,18 @@ func buildRoutes(data *Data) error {
 			if err := section.Hiking.Regular.Normalise(); err != nil {
 				return fmt.Errorf("normalising GPT%v regular hiking route: %w", section.Key.Code(), err)
 			}
+			if err := section.Hiking.Calculate(); err != nil {
+				return fmt.Errorf("calculating stats for GPT%v hiking bundle: %w", section.Key.Code(), err)
+			}
 		}
 		if section.Packrafting != nil {
 			if err := section.Packrafting.Regular.Normalise(); err != nil {
 				return fmt.Errorf("normalising GPT%v regular packrafting route: %w", section.Key.Code(), err)
 			}
+			if err := section.Packrafting.Calculate(); err != nil {
+				return fmt.Errorf("calculating stats for GPT%v packrafting bundle: %w", section.Key.Code(), err)
+			}
 		}
-		// Optional routes can't be normalised (not continuous enough)
-
 	}
 	return nil
 }

@@ -49,6 +49,33 @@ type Bundle struct {
 	Options      map[OptionalKey]*Route // Options and variants for this section. For the hiking bundle any options with packrafting terrain type are excluded.
 }
 
+func (b *Bundle) Calculate() error {
+	if err := CalculateSegmentLengths(b.Regular.Segments, true); err != nil {
+		return fmt.Errorf("calculating regular route segment lengths: %w", err)
+	}
+	if err := CalculateSegmentLengths(b.Alternatives, false); err != nil {
+		return fmt.Errorf("calculating regular route hiking alternatives segment lengths: %w", err)
+	}
+	for _, route := range b.Options {
+		if err := CalculateSegmentLengths(route.Segments, false); err != nil {
+			return fmt.Errorf("calculating optional route segment lengths: %w", err)
+		}
+	}
+	return nil
+}
+
+func CalculateSegmentLengths(segments []*Segment, start bool) error {
+	var count float64
+	for _, segment := range segments {
+		segment.Length = segment.Line.Length()
+		if start {
+			segment.From = count
+			count += segment.Length
+		}
+	}
+	return nil
+}
+
 type SectionKey struct {
 	Number int
 	Suffix string
@@ -344,10 +371,7 @@ type Segment struct {
 }
 
 func (s Segment) Description() string {
-	if s.Length > 0 {
-		return s.DescriptionLength(s.Length)
-	}
-	return s.DescriptionLength(s.Line.Length())
+	return s.DescriptionLength(s.Length)
 }
 
 func (s Segment) DescriptionLength(length float64) string {

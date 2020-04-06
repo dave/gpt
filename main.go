@@ -13,7 +13,7 @@ import (
 
 var SrtmClient *geoelevations.Srtm
 
-const VERSION = "v0.0.6"
+const VERSION = "v0.0.7"
 
 func main() {
 	if err := Main(); err != nil {
