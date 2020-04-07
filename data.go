@@ -32,6 +32,24 @@ type SectionNode struct {
 	Sections  []SectionKey // One waypoint can be at the start / end of multiple
 }
 
+func (n SectionNode) String() string {
+	var b strings.Builder
+	b.WriteString("GPT")
+	var codes []string
+	for _, section := range n.Sections {
+		codes = append(codes, section.Code())
+	}
+	b.WriteString(strings.Join(codes, "/"))
+	if n.Option != "" {
+		b.WriteString("-")
+		b.WriteString(n.Option)
+	}
+	b.WriteString(" (")
+	b.WriteString(n.Name)
+	b.WriteString(")")
+	return b.String()
+}
+
 // Section is a section folder
 type Section struct {
 	Raw         string // raw name of the section folder
@@ -41,6 +59,10 @@ type Section struct {
 	Hiking      *Bundle  // If this section has a regular route that does not include packrafting, it's here.
 	Packrafting *Bundle  // This is the regular route for this section with packrafting trails chosen when possible.
 	Waypoints   []Waypoint
+}
+
+func (s Section) String() string {
+	return fmt.Sprintf("GPT%s-%s", s.Key.Code(), s.Name)
 }
 
 type Bundle struct {
@@ -353,6 +375,32 @@ type Track struct {
 	Segments     []*Segment
 }
 
+func (t Track) String() string {
+	var b strings.Builder
+	if t.Optional {
+		if t.Variants {
+			b.WriteString("Variants")
+		} else {
+			b.WriteString("Option ")
+			b.WriteString(fmt.Sprint(t.Option))
+			b.WriteString(" ")
+			b.WriteString(t.Name)
+		}
+	} else {
+		if t.Experimental {
+			b.WriteString("EXP")
+			b.WriteString("-")
+		}
+		b.WriteString(t.Code)
+	}
+	if t.Year > 0 {
+		b.WriteString(" (")
+		b.WriteString(fmt.Sprintf("%04d", t.Year))
+		b.WriteString(")")
+	}
+	return b.String()
+}
+
 // Segment is a placemark / linestring in a track folder
 type Segment struct {
 	*Track
@@ -368,6 +416,42 @@ type Segment struct {
 	Length       float64 // length km for regular track
 	Name         string  // named feature
 	Line         geo.Line
+}
+
+func (s Segment) String() string {
+	var b strings.Builder
+	if s.Experimental {
+		b.WriteString("EXP")
+		b.WriteString("-")
+	}
+	b.WriteString(s.Code)
+	b.WriteString("-")
+	b.WriteString(s.Terrain)
+	if s.Verification != "" || s.Directional != "" {
+		b.WriteString("-")
+		b.WriteString(s.Verification)
+		b.WriteString(s.Directional)
+	}
+	b.WriteString("@")
+	b.WriteString(s.Section.Key.Code())
+	if s.Optional {
+		b.WriteString("-")
+		if s.Option > 0 {
+			b.WriteString(fmt.Sprintf("%02d", s.Option))
+		}
+		b.WriteString(s.Variant)
+		b.WriteString("-")
+		b.WriteString(fmt.Sprintf("#%03d", s.Count))
+	} else {
+		b.WriteString("-")
+		b.WriteString(fmt.Sprintf("%.1f+%.1f", s.From, s.Length))
+	}
+	if s.Name != "" {
+		b.WriteString(" (")
+		b.WriteString(s.Name)
+		b.WriteString(")")
+	}
+	return b.String()
 }
 
 func (s Segment) Description() string {

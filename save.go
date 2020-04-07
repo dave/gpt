@@ -59,7 +59,7 @@ func saveKmlWaypoints(data *Data, dpath string, stamp string) error {
 			folder = optionalStartFolder
 		}
 		folder.Placemarks = append(folder.Placemarks, &kml.Placemark{
-			Name:  node.Raw,
+			Name:  node.String(),
 			Point: kml.PosPoint(node.Pos),
 		})
 	}
@@ -74,7 +74,7 @@ func saveKmlWaypoints(data *Data, dpath string, stamp string) error {
 			continue
 		}
 		sectionFolder := &kml.Folder{
-			Name: section.Raw,
+			Name: section.String(),
 			Open: 1,
 		}
 		for _, w := range section.Waypoints {
@@ -189,7 +189,7 @@ func saveKmlTracks(data *Data, dpath string, stamp string) error {
 		for _, key := range data.Keys {
 			section := data.Sections[key]
 			sectionFolder := &kml.Folder{
-				Name: section.Raw,
+				Name: section.String(),
 				Open: 1,
 			}
 			for _, track := range section.Tracks {
@@ -199,12 +199,12 @@ func saveKmlTracks(data *Data, dpath string, stamp string) error {
 					continue
 				}
 				trackFolder := &kml.Folder{
-					Name: track.Raw,
+					Name: track.String(),
 					Open: 1,
 				}
 				for _, segment := range track.Segments {
 					trackFolder.Placemarks = append(trackFolder.Placemarks, &kml.Placemark{
-						Name: segment.Raw,
+						Name: segment.String(),
 						Open: 1,
 						LineString: &kml.LineString{
 							Tessellate:  true,
@@ -776,7 +776,7 @@ func saveGpx(data *Data, dpath string, stamp string) error {
 		g := gpx.Root{}
 		for _, segment := range m.segments {
 			g.Tracks = append(g.Tracks, gpx.Track{
-				Name:     segment.Raw,
+				Name:     segment.String(),
 				Segments: []gpx.TrackSegment{{Points: gpx.LineTrackPoints(segment.Line)}},
 			})
 		}
@@ -829,12 +829,12 @@ func saveGpx(data *Data, dpath string, stamp string) error {
 		if node.Option == "" {
 			wpRegNode.Waypoints = append(wpRegNode.Waypoints, gpx.Waypoint{
 				Point: gpx.PosPoint(node.Pos),
-				Name:  node.Raw,
+				Name:  node.String(),
 			})
 		} else {
 			wpOptNode.Waypoints = append(wpOptNode.Waypoints, gpx.Waypoint{
 				Point: gpx.PosPoint(node.Pos),
-				Name:  node.Raw,
+				Name:  node.String(),
 			})
 		}
 	}
@@ -924,7 +924,7 @@ func saveGaia(data *Data, dpath string) error {
 					for _, segment := range group {
 
 						rte.Desc += segment.Description() + "\n"
-						wp.Desc += segment.Raw + "\n"
+						wp.Desc += segment.String() + "\n"
 
 						totalLength += segment.Length
 					}
