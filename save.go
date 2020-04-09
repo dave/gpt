@@ -935,23 +935,14 @@ func saveGaia(data *Data, dpath string) error {
 
 				}
 
-				if mode == "packrafting" && len(bundle.Alternatives) > 0 {
-					// packrafting sections have the hiking alternatives where the regular hiking route went a different way
-					var alternatives gpx.Track
-					alternatives.Name = fmt.Sprintf("GPT%s hiking alternatives", section.Key.Code())
-					for _, segment := range bundle.Alternatives {
-						alternatives.Segments = append(alternatives.Segments, gpx.TrackSegment{Points: gpx.LineTrackPoints(segment.Line)})
-
-						alternatives.Desc += segment.Description() + "\n"
-					}
-					contents["options"].Tracks = append(contents["options"].Tracks, alternatives)
-				}
 				rte.Points = gpx.LinePoints(geo.MergeLines(lines))
 				contents["routes"].Routes = append(contents["routes"].Routes, rte)
 
 				for _, route := range bundle.Options {
 					var trk gpx.Track
-					if route.Key.Option == 0 {
+					if route.Key.Alternatives {
+						trk.Name = fmt.Sprintf("GPT%v hiking alternatives", route.Section.Key.Code())
+					} else if route.Key.Option == 0 {
 						trk.Name = fmt.Sprintf("GPT%v variant %v", route.Section.Key.Code(), route.Key.Code())
 					} else {
 						trk.Name = fmt.Sprintf("GPT%v option %v", route.Section.Key.Code(), route.Key.Code())
@@ -960,7 +951,6 @@ func saveGaia(data *Data, dpath string) error {
 						trk.Segments = append(trk.Segments, gpx.TrackSegment{Points: gpx.LineTrackPoints(segment.Line)})
 						trk.Desc += segment.Description() + "\n"
 					}
-
 					contents["options"].Tracks = append(contents["options"].Tracks, trk)
 				}
 

@@ -21,9 +21,18 @@ func buildRoutes(data *Data) error {
 						bundle.Regular.Segments = append(bundle.Regular.Segments, segment)
 					}
 				}
-				if packrafting && track.Code == "RH" {
+				if packrafting && track.Code == "RH" && len(track.Segments) > 0 {
+					key := OptionalKey{Alternatives: true}
+					if bundle.Options[key] == nil {
+						bundle.Options[key] = &Route{
+							Section:     section,
+							Hiking:      false,
+							Packrafting: true,
+							Key:         key,
+						}
+					}
 					for _, segment := range track.Segments {
-						bundle.Alternatives = append(bundle.Alternatives, segment)
+						bundle.Options[key].Segments = append(bundle.Options[key].Segments, segment)
 					}
 				}
 			}
@@ -37,7 +46,7 @@ func buildRoutes(data *Data) error {
 					continue
 				}
 				for _, segment := range track.Segments {
-					key := OptionalKey{track.Option, segment.Variant}
+					key := OptionalKey{Option: track.Option, Variant: segment.Variant}
 					if optionalRoutes[key] == nil {
 						optionalRoutes[key] = &Route{
 							Section: section,
@@ -85,19 +94,13 @@ func buildRoutes(data *Data) error {
 	for _, key := range data.Keys {
 		section := data.Sections[key]
 		if section.Hiking != nil {
-			if err := section.Hiking.Regular.Normalise(); err != nil {
-				return fmt.Errorf("normalising GPT%v regular hiking route: %w", section.Key.Code(), err)
-			}
-			if err := section.Hiking.Calculate(); err != nil {
-				return fmt.Errorf("calculating stats for GPT%v hiking bundle: %w", section.Key.Code(), err)
+			if err := section.Hiking.Post(); err != nil {
+				return fmt.Errorf("post build for GPT%v hiking bundle: %w", section.Key.Code(), err)
 			}
 		}
 		if section.Packrafting != nil {
-			if err := section.Packrafting.Regular.Normalise(); err != nil {
-				return fmt.Errorf("normalising GPT%v regular packrafting route: %w", section.Key.Code(), err)
-			}
-			if err := section.Packrafting.Calculate(); err != nil {
-				return fmt.Errorf("calculating stats for GPT%v packrafting bundle: %w", section.Key.Code(), err)
+			if err := section.Packrafting.Post(); err != nil {
+				return fmt.Errorf("post build for GPT%v packrafting bundle: %w", section.Key.Code(), err)
 			}
 		}
 	}

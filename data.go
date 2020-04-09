@@ -66,17 +66,49 @@ func (s Section) String() string {
 }
 
 type Bundle struct {
-	Regular      *Route                 // The regular route for this section.
-	Alternatives []*Segment             // For packrafting bundles, this is the RH parts of the regular routes (will be included in options). These segments are not continuous.
-	Options      map[OptionalKey]*Route // Options and variants for this section. For the hiking bundle any options with packrafting terrain type are excluded.
+	Regular *Route                 // The regular route for this section.
+	Options map[OptionalKey]*Route // Options and variants for this section. For the hiking bundle any options with packrafting terrain type are excluded.
+}
+
+// Post build tasks - normalise, tweak elevations for water, calculate stats etc.
+func (b *Bundle) Post() error {
+	if err := b.Regular.Normalise(); err != nil {
+		return fmt.Errorf("normalising regular route: %w", err)
+	}
+	if err := b.Water(); err != nil {
+		return fmt.Errorf("tweaking water elevations: %w", err)
+	}
+	if err := b.Calculate(); err != nil {
+		return fmt.Errorf("calculating stats: %w", err)
+	}
+	return nil
+}
+
+// Water elevations should be flat or always run downhill
+func (b *Bundle) Water() error {
+	//	do := func(segments []*Segment, adjoining bool) error {
+
+	//	}
+	/*
+		The elevations are often incorrect, especially in deep valleys or near cliffs. This can be corrected for water
+		sections, because we know some things:
+
+		Step 1: treat adjoining segments with the same terrain type as one section
+
+		Lakes and ferries: apply the lowest point of the segment to the entire segment (but never less 0 m)
+
+		Fjords: elevation = 0
+
+		Rivers: Verify the river flow direction be looking at the start and end elevations (take average of first and
+		last 1 km) and flow direction is downhill. Then step through all GPX points in the route ensuring none have a
+		higher elevation than the previous points.
+	*/
+	return nil
 }
 
 func (b *Bundle) Calculate() error {
 	if err := CalculateSegmentLengths(b.Regular.Segments, true); err != nil {
 		return fmt.Errorf("calculating regular route segment lengths: %w", err)
-	}
-	if err := CalculateSegmentLengths(b.Alternatives, false); err != nil {
-		return fmt.Errorf("calculating regular route hiking alternatives segment lengths: %w", err)
 	}
 	for _, route := range b.Options {
 		if err := CalculateSegmentLengths(route.Segments, false); err != nil {
@@ -128,8 +160,9 @@ func NewSectionKey(code string) (SectionKey, error) {
 }
 
 type OptionalKey struct {
-	Option  int
-	Variant string
+	Option       int    // Option number. If true => Alternatives == false.
+	Variant      string // Variant code. If true => Alternatives == false.
+	Alternatives bool   // Hiking alternatives for packrafting routes. If true => Option == 0 && Variant == "".
 }
 
 func (k OptionalKey) Code() string {
@@ -337,7 +370,7 @@ func (r *Route) Normalise() error {
 			switch {
 			case next.Raw == "EXP-RP-RI-2@90P-152.3+7.6":
 			case next.Raw == "RP-LK-1@37P-5.3+1.8":
-			case r.Section.Key.Code() == "24H" && r.Key == OptionalKey{0, "A"}:
+			case r.Section.Key.Code() == "24H" && r.Key == OptionalKey{Option: 0, Variant: "A"}:
 			// ignore
 			default:
 				//fmt.Printf("closest segment to %q is %q - %.0f m away\n", current.Raw, next.Raw, dist*1000)
