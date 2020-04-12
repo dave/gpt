@@ -10,13 +10,23 @@ import (
 	"github.com/dave/gpt/kml"
 )
 
-func scanKml(tracksRoot, pointsRoot kml.Root, elevation bool) (*Data, error) {
+func scanKml(inputRoot kml.Root, elevation bool) (*Data, error) {
 	data := &Data{
 		Keys:     nil,
 		Sections: map[SectionKey]*Section{},
 	}
 
-	for _, rootFolder := range tracksRoot.Document.Folders[0].Folders {
+	var tracksFolder, pointsFolder *kml.Folder
+	for _, folder := range inputRoot.Document.Folders[0].Folders {
+		switch folder.Name {
+		case "Tracks":
+			tracksFolder = folder
+		case "Points":
+			pointsFolder = folder
+		}
+	}
+
+	for _, rootFolder := range tracksFolder.Folders {
 		optional := rootFolder.Name == "Optional Tracks"
 		for _, sectionFolder := range rootFolder.Folders {
 
@@ -47,15 +57,6 @@ func scanKml(tracksRoot, pointsRoot kml.Root, elevation bool) (*Data, error) {
 
 			for _, trackFolder := range sectionFolder.Folders {
 
-				switch trackFolder.Name {
-				case "Varriants (2018)":
-					trackFolder.Name = "Variants (2018)"
-				case "Option 1 (Puerto Montt)":
-					trackFolder.Name = "Option 1 Puerto Montt (0000)"
-				case "Option 2 (Quellon)":
-					trackFolder.Name = "Option 2 Quellon (0000)"
-				}
-
 				track := &Track{
 					Raw:      trackFolder.Name,
 					Section:  section,
@@ -67,31 +68,34 @@ func scanKml(tracksRoot, pointsRoot kml.Root, elevation bool) (*Data, error) {
 					// ^(EXP-)?([A-Z]{2}) \((\d{4})\)$
 					track.Experimental = matches[1] == "EXP-"
 					track.Code = matches[2]
+					track.Direction = matches[3]
 
 					// TODO: Remove this special case
-					if section.Key.Code() == "24H" && !track.Optional {
-						// Tracks in 24P are RH but should be RR
+					if (section.Key.Code() == "24H" || section.Key.Code() == "17H") && !track.Optional {
+						// Tracks in 17H 24H are RH but should be RR
 						track.Code = "RR"
 					}
 
-					year, err := strconv.Atoi(matches[3])
+					year, err := strconv.Atoi(matches[4])
 					if err != nil {
-						return nil, fmt.Errorf("decoding year from %q - %q", trackFolder.Name, matches[3])
+						return nil, fmt.Errorf("decoding year from %q - %q", trackFolder.Name, matches[4])
 					}
 					track.Year = year
 				} else if matches := level3FolderName2.FindStringSubmatch(trackFolder.Name); len(matches) != 0 {
-					// ^Option (\d{1,2}) (.*) \((\d{4}\))$
+					// ^Option (\d{1,2}) ([^(]*)( \((\d{4})\))?$
 					option, err := strconv.Atoi(matches[1])
 					if err != nil {
 						return nil, fmt.Errorf("decoding option number from %q - %q", trackFolder.Name, matches[1])
 					}
 					track.Option = option
 					track.Name = matches[2]
-					year, err := strconv.Atoi(matches[3])
-					if err != nil {
-						return nil, fmt.Errorf("decoding year from %q - %q", trackFolder.Name, matches[3])
+					if matches[4] != "" {
+						year, err := strconv.Atoi(matches[4])
+						if err != nil {
+							return nil, fmt.Errorf("decoding year from %q - %q", trackFolder.Name, matches[3])
+						}
+						track.Year = year
 					}
-					track.Year = year
 				} else if matches := level3FolderName3.FindStringSubmatch(trackFolder.Name); len(matches) != 0 {
 					// ^Varr?iants \((\d{4}\))$
 					track.Variants = true
@@ -112,46 +116,89 @@ func scanKml(tracksRoot, pointsRoot kml.Root, elevation bool) (*Data, error) {
 						Raw:   segmentPlacemark.Name,
 						Track: track,
 					}
-					track.Segments = append(track.Segments, segment)
 
 					switch segmentPlacemark.Name {
-					case "RH-MR-V@24H-75.8¦1.7":
-						segmentPlacemark.Name = "RH-MR-V@24H-75.8+1.7"
-					case "EXP-OH-CC-A@T28H-05-#003":
-						segmentPlacemark.Name = "EXP-OH-CC-A@28H-05-#003"
-					case "EXP-OP-BB-I@#36P-04A-#001":
-						segmentPlacemark.Name = "EXP-OP-BB-I@36P-04A-#001"
-					case "EXP-OP-TL-V@82P-1-#001":
-						segmentPlacemark.Name = "EXP-OP-TL-V@82P-01-#001"
 
-					// missing hyphens
-					case "OH-CC-A@03-02#016":
-						segmentPlacemark.Name = "OH-CC-A@03-02-#016"
-					case "OH-MR-V@08-F#001":
-						segmentPlacemark.Name = "OH-MR-V@08-F-#001"
-					case "OH-CC-A@11-02A#001":
-						segmentPlacemark.Name = "OH-CC-A@11-02A-#001"
-					case "OH-CC-A@12-K#001":
-						segmentPlacemark.Name = "OH-CC-A@12-K-#001"
-					case "OH-MR-V@12-M#001":
-						segmentPlacemark.Name = "OH-MR-V@12-M-#001"
-					case "OH-TL-V@12-M#003":
-						segmentPlacemark.Name = "OH-TL-V@12-M-#003"
-					case "OH-MR-V@12-M#004":
-						segmentPlacemark.Name = "OH-MR-V@12-M-#004"
-					case "OH-TL-V@12-02A#001":
-						segmentPlacemark.Name = "OH-TL-V@12-02A-#001"
-					case "OP-MR-V@22-G#007":
-						segmentPlacemark.Name = "OP-MR-V@22-G-#007"
-					case "OP-PR-V@27P-E#001":
-						segmentPlacemark.Name = "OP-PR-V@27P-E-#001"
-					case "OP-TL-V@27P-E#002":
-						segmentPlacemark.Name = "OP-TL-V@27P-E-#002"
-					case "EXP-OP-TL-V@90P-01#011":
-						segmentPlacemark.Name = "EXP-OP-TL-V@90P-01-#011"
+					// double space
+					case "RP-FJ-2@29P-107.7+5.3  (Fiordo Aysen)":
+						segmentPlacemark.Name = "RP-FJ-2@29P-107.7+5.3 (Fiordo Aysen)"
+					case "OP-FJ-2@28P-01-#002  (Fiordo Pitipalena Brazo Pillan)":
+						segmentPlacemark.Name = "OP-FJ-2@28P-01-#002 (Fiordo Pitipalena Brazo Pillan)"
+					case "OP-RI-2@28P-04-#001  (Rio Melimoyu)":
+						segmentPlacemark.Name = "OP-RI-2@28P-04-#001 (Rio Melimoyu)"
+					case "OP-FJ-2@28P-05B-#002  (Estero del Medio)":
+						segmentPlacemark.Name = "OP-FJ-2@28P-05B-#002 (Estero del Medio)"
+					case "OP-FJ-2@90P-01-#001  (Fiordo Aysen)":
+						segmentPlacemark.Name = "OP-FJ-2@90P-01-#001 (Fiordo Aysen)"
+
+					// missing length
+					case "RP-LK-2@31P-180.8+ (Lago Riesco)":
+						segmentPlacemark.Name = "RP-LK-2@31P-180.8+0.0 (Lago Riesco)"
+
+					case "RP-LK-2@35-53.4+5.2\n (Lago Jeinemeni)":
+						segmentPlacemark.Name = "RP-LK-2@35-53.4+5.2 (Lago Jeinemeni)"
+
+					case "Untitled Path", "Untitled Path (Lago Zenteno)":
+						continue
+
+					case "OH-MR-V", "OH-PR-V", "OH-TL-V":
+						continue
+
+					case "OP-FJ-2@28P-06-#0010 (Canal Puyuhuapi)":
+						segmentPlacemark.Name = "OP-FJ-2@28P-06-#010 (Canal Puyuhuapi)"
+
+					case "OH-TL-V@33H-08-#005A":
+						segmentPlacemark.Name = "OH-TL-V@33H-08A-#005"
+
+					case "OP-MR-V @33H-11E-#001":
+						segmentPlacemark.Name = "OP-MR-V@33H-11E-#001"
+					case "OP-MR-V@35-02-$00":
+						segmentPlacemark.Name = "OP-MR-V@35-02-#002"
+
+					case "OP-TL&BB@36P-02-#009":
+						segmentPlacemark.Name = "OP-TL&BB-V@36P-02-#009"
+
+					case "RH-TL&CC-I@76-B-#001":
+						segmentPlacemark.Name = "OH-TL&CC-I@76-B-#001"
+
+					case "LK-2@91P-01-#007 (Lago Gualas)":
+						segmentPlacemark.Name = "OP-LK-2@91P-01-#007 (Lago Gualas)"
+
+						// wrong section codes
+					case "RP-RI-1@36H- (Rio Cisnes)":
+						segmentPlacemark.Name = "RP-RI-1@36P- (Rio Cisnes)" // has wrong section number in "GPT36P-Rio Baker"
+					case "RP-LK-2@36H- (Lago Ciervo)":
+						segmentPlacemark.Name = "RP-LK-2@36P- (Lago Ciervo)" // has wrong section number in "GPT36P-Rio Baker"
+					case "RP-RI-1@36H- (Rio Mayer)":
+						segmentPlacemark.Name = "RP-RI-1@36P- (Rio Mayer)" // has wrong section number in "GPT36P-Rio Baker"
+					case "OH-TL-V@34P-01A-#001":
+						segmentPlacemark.Name = "OH-TL-V@33H-06A-#001" // has wrong section number in "GPT33H-Torres de Avellano" AND OPTION NUMBER
+					case "OH-TL-V@34P-01B-#001":
+						segmentPlacemark.Name = "OH-TL-V@33H-06B-#001" // has wrong section number in "GPT33H-Torres de Avellano" AND OPTION NUMBER
+					case "OH-TL-V@34P-01C-#001":
+						segmentPlacemark.Name = "OH-TL-V@33H-06C-#001" // has wrong section number in "GPT33H-Torres de Avellano" AND OPTION NUMBER
+					case "OH-TL-V@34P-01E-#001":
+						segmentPlacemark.Name = "OH-TL-V@33H-06E-#001" // has wrong section number in "GPT33H-Torres de Avellano" AND OPTION NUMBER
+
+					// Broken options:
+					case "OH-MR-V@32-", "OH-MR-I@32-", "OH-CC-I@32-", "OH-TL-I@32-", "OH-TL-V@32-":
+						continue
+
+					case "OP-CC-A@36H-C-#002":
+						segmentPlacemark.Name = "OP-CC-A@36H-11C-#002" //"Option 11 Rio Salto (2018)"
+					case "OP-LK-2@36H-C-#003 (Laguna Esmeralda)":
+						segmentPlacemark.Name = "OP-LK-2@36H-11C-#003 (Laguna Esmeralda)" //"Option 11 Rio Salto (2018)"
+					case "OP-RI-1@36P-02-#001 (Rio Bravo)":
+						segmentPlacemark.Name = "OP-RI-1@36P-03-#001 (Rio Bravo)" //"Option 3 Rio Bravo (2019)"
+					case "OP-FJ-2@36P-02-#002 (Fiordo Mitchell)":
+						segmentPlacemark.Name = "OP-FJ-2@36P-03-#002 (Fiordo Mitchell)" //"Option 3 Rio Bravo (2019)"
+
 					}
 
-					if matches := placemarkName.FindStringSubmatch(segmentPlacemark.Name); len(matches) != 0 {
+					if matches := placemarkName.FindStringSubmatch(segmentPlacemark.Name); len(matches) == 0 {
+						//fmt.Printf("case %q: placemark.Name = %q\n", placemark.Name, strings.ReplaceAll(placemark.Name, "#", "-#"))
+						return nil, fmt.Errorf("no placemark regex match for %q in %q %q", segmentPlacemark.Name, section.String(), track.String())
+					} else {
 						//fmt.Printf("%v %#v\n", segmentPlacemark.Name, matches)
 
 						if matches[1] == "EXP-" {
@@ -160,8 +207,8 @@ func scanKml(tracksRoot, pointsRoot kml.Root, elevation bool) (*Data, error) {
 						segment.Code = matches[2]
 
 						// TODO: Remove this special case
-						if section.Key.Code() == "24H" && !track.Optional {
-							// Tracks in 24P are RH but should be RR
+						if (section.Key.Code() == "24H" || section.Key.Code() == "17H") && !track.Optional {
+							// Tracks in 17H 24H are RH but should be RR
 							segment.Code = "RR"
 						}
 
@@ -188,11 +235,11 @@ func scanKml(tracksRoot, pointsRoot kml.Root, elevation bool) (*Data, error) {
 								return nil, fmt.Errorf("segment %q is not in Optional Tracks folder", segment.Raw)
 							}
 						}
-						segment.Terrain = matches[3]
-						if segment.Terrain != "" {
-							desc := Terrain(segment.Terrain)
+						segment.Terrains = strings.Split(matches[3], "&")
+						for _, terrain := range segment.Terrains {
+							desc := Terrain(terrain)
 							if desc == "" {
-								return nil, fmt.Errorf("unexpected terrain code %q in %q", segment.Terrain, segment.Raw)
+								return nil, fmt.Errorf("unexpected terrain code %q in %q", terrain, segment.Raw)
 							}
 						}
 						segment.Verification = matches[4]
@@ -210,14 +257,13 @@ func scanKml(tracksRoot, pointsRoot kml.Root, elevation bool) (*Data, error) {
 							}
 						}
 
-						section, err := strconv.Atoi(matches[6])
+						key, err := NewSectionKey(matches[6] + matches[7])
 						if err != nil {
-							return nil, fmt.Errorf("decoding section number from %q", segmentPlacemark.Name)
+							return nil, fmt.Errorf("decoding section number from %q: %w", segmentPlacemark.Name, err)
 						}
-						if section != segment.Track.Section.Key.Number || matches[7] != segment.Track.Section.Key.Suffix {
-							// TODO: Put this error back in once Jan has updated the input files
-							//fmt.Printf("%q is in %q\n", segment.Raw, segment.Track.Section.Raw)
-							//return fmt.Errorf("segment %q has wrong section number", segmentPlacemark.Name)
+						if key.Number != segment.Track.Section.Key.Number || key.Suffix != segment.Track.Section.Key.Suffix {
+							//fmt.Printf("segment %q has wrong section number in %q\n", segmentPlacemark.Name, segment.Track.Section.String())
+							return nil, fmt.Errorf("segment %q has wrong section number in %q", segmentPlacemark.Name, segment.Track.Section.String())
 						}
 
 						var option int
@@ -228,9 +274,8 @@ func scanKml(tracksRoot, pointsRoot kml.Root, elevation bool) (*Data, error) {
 							}
 						}
 						if option != segment.Track.Option {
-							// TODO: Put this error back in once Jan has updated the input files
 							//fmt.Printf("incorrect option: %q is in %q\n", segment.Raw, segment.Track.Raw)
-							//return fmt.Errorf("incorrect option %q is in %q", segment.Raw, segment.Track.Raw)
+							return nil, fmt.Errorf("incorrect option %q is in %q", segment.Raw, segment.Track.Raw)
 						}
 
 						segment.Variant = matches[11]
@@ -246,23 +291,28 @@ func scanKml(tracksRoot, pointsRoot kml.Root, elevation bool) (*Data, error) {
 							segment.Count = count
 						}
 
-						if matches[13] != "" {
-							from, err := strconv.ParseFloat(matches[13], 64)
+						if matches[14] != "" {
+							from, err := strconv.ParseFloat(matches[14], 64)
 							if err != nil {
-								return nil, fmt.Errorf("decoding from number from %q", segmentPlacemark.Name)
+								return nil, fmt.Errorf("decoding from number %q from %q", matches[14], segmentPlacemark.Name)
 							}
 							segment.From = from
+						} else {
+							segment.From = 999 // to stop these from being treated as segment start points
 						}
 
-						if matches[14] != "" {
-							length, err := strconv.ParseFloat(matches[14], 64)
-							if err != nil {
-								return nil, fmt.Errorf("decoding length number from %q", segmentPlacemark.Name)
+						// Removed length from name - always calculate (below).
+						/*
+							if matches[15] != "" {
+								length, err := strconv.ParseFloat(matches[15], 64)
+								if err != nil {
+									return nil, fmt.Errorf("decoding length number %q from %q", matches[15], segmentPlacemark.Name)
+								}
+								segment.Length = length
 							}
-							segment.Length = length
-						}
+						*/
 
-						segment.Name = matches[16]
+						segment.Name = matches[17]
 
 						var ls kml.LineString
 						if segmentPlacemark.LineString == nil {
@@ -271,6 +321,7 @@ func scanKml(tracksRoot, pointsRoot kml.Root, elevation bool) (*Data, error) {
 							ls = *segmentPlacemark.LineString
 						}
 						segment.Line = ls.Line()
+						segment.Length = ls.Line().Length()
 
 						if elevation {
 							// lookup elevations
@@ -282,11 +333,8 @@ func scanKml(tracksRoot, pointsRoot kml.Root, elevation bool) (*Data, error) {
 								segment.Line[i].Ele = elevation
 							}
 						}
-
-					} else {
-						//fmt.Printf("case %q: placemark.Name = %q\n", placemark.Name, strings.ReplaceAll(placemark.Name, "#", "-#"))
-						return nil, fmt.Errorf("no placemark regex match for %q", segmentPlacemark.Name)
 					}
+					track.Segments = append(track.Segments, segment)
 				}
 			}
 		}
@@ -303,18 +351,18 @@ func scanKml(tracksRoot, pointsRoot kml.Root, elevation bool) (*Data, error) {
 		78: true,
 	}
 
-	for _, folder := range pointsRoot.Document.Folders[0].Folders {
+	for _, folder := range pointsFolder.Folders {
 		switch folder.Name {
 		case "Section Start and End Points":
 			for _, inner := range folder.Folders {
 				switch inner.Name {
 				case "Regular Routes":
 					for _, p := range inner.Placemarks {
-						matches := regularNodeName.FindStringSubmatch(p.Name)
+						matches := regularTerminatorName.FindStringSubmatch(p.Name)
 						if len(matches) != 4 {
 							return nil, fmt.Errorf("parsing regular route start/end point %q", p.Name)
 						}
-						r := SectionNode{
+						r := Terminator{
 							Raw:  p.Name,
 							Name: matches[3],
 							Pos:  p.Point.Pos(),
@@ -322,42 +370,42 @@ func scanKml(tracksRoot, pointsRoot kml.Root, elevation bool) (*Data, error) {
 						for _, s := range strings.Split(matches[1], "/") {
 							key, err := NewSectionKey(s)
 							if err != nil {
-								return nil, fmt.Errorf("parsting section key %q from %q: %w", s, p.Name, err)
+								return nil, fmt.Errorf("parsing section key %q from %q: %w", s, p.Name, err)
 							}
 							if removeSuffix[key.Number] {
 								key.Suffix = ""
 							}
 							r.Sections = append(r.Sections, key)
 						}
-						data.Nodes = append(data.Nodes, r)
+						data.Terminators = append(data.Terminators, r)
 					}
 				case "Optional Routes":
 					for _, p := range inner.Placemarks {
-						matches := optionsNodeName.FindStringSubmatch(p.Name)
+						matches := optionsTerminatorName.FindStringSubmatch(p.Name)
 						if len(matches) != 5 {
 							return nil, fmt.Errorf("parsing optional route start/end point %q", p.Name)
 						}
-						r := SectionNode{
+						r := Terminator{
 							Raw:    p.Name,
 							Name:   matches[4],
 							Pos:    p.Point.Pos(),
 							Option: matches[3],
 						}
 						if r.Option == "" {
-							// any optional node without a option code should be A?
+							// any optional terminator without a option code should be A?
 							r.Option = "A"
 						}
 						for _, s := range strings.Split(matches[1], "/") {
 							key, err := NewSectionKey(s)
 							if err != nil {
-								return nil, fmt.Errorf("parsting section key %q from %q: %w", s, p.Name, err)
+								return nil, fmt.Errorf("parsing section key %q from %q: %w", s, p.Name, err)
 							}
 							if removeSuffix[key.Number] {
 								key.Suffix = ""
 							}
 							r.Sections = append(r.Sections, key)
 						}
-						data.Nodes = append(data.Nodes, r)
+						data.Terminators = append(data.Terminators, r)
 					}
 				}
 
@@ -391,7 +439,9 @@ func scanKml(tracksRoot, pointsRoot kml.Root, elevation bool) (*Data, error) {
 				}
 				for _, p := range f.Placemarks {
 					data.Sections[key].Waypoints = append(data.Sections[key].Waypoints, Waypoint{
-						Pos:  p.Point.Pos(),
+						Pos: p.Point.Pos(),
+
+						// TODO: remove this?
 						Name: strings.TrimSuffix(p.Name, "-"), // all waypoint names end with "-"?
 					})
 				}
@@ -421,12 +471,12 @@ func scanKml(tracksRoot, pointsRoot kml.Root, elevation bool) (*Data, error) {
 				return nil, err
 			}
 		}
-		for i, node := range data.Nodes {
-			elevation, err := SrtmClient.GetElevation(http.DefaultClient, node.Lat, node.Lon)
+		for i, terminator := range data.Terminators {
+			elevation, err := SrtmClient.GetElevation(http.DefaultClient, terminator.Lat, terminator.Lon)
 			if err != nil {
-				return nil, fmt.Errorf("looking up node elevation: %w", err)
+				return nil, fmt.Errorf("looking up terminator elevation: %w", err)
 			}
-			data.Nodes[i].Ele = elevation
+			data.Terminators[i].Ele = elevation
 		}
 	}
 
@@ -434,11 +484,11 @@ func scanKml(tracksRoot, pointsRoot kml.Root, elevation bool) (*Data, error) {
 }
 
 var level2FolderName = regexp.MustCompile(`^GPT(\d{2})([HP]?)-(.*)$`)
-var level3FolderName1 = regexp.MustCompile(`^(EXP-)?([A-Z]{2}) \((\d{4})\)$`)
-var level3FolderName2 = regexp.MustCompile(`^Option (\d{1,2}) (.*) \((\d{4})\)$`)
+var level3FolderName1 = regexp.MustCompile(`^(EXP-)?([A-Z]{2})([NS])? \((\d{4})\)$`)
+var level3FolderName2 = regexp.MustCompile(`^Option (\d{1,2}) ([^(]*)( \((\d{4})\))?$`)
 var level3FolderName3 = regexp.MustCompile(`^Variants \((\d{4})\)$`)
 var level3FolderName4 = regexp.MustCompile(`^Variants$`)
-var placemarkName = regexp.MustCompile(`^(EXP-)?([A-Z]{2})-([A-Z]{2})-([VAI]?)([12]?)@(\d{2})([A-Z]?)-(((\d{2})?([A-Z]?)-)?#(\d{3})|(\d+\.\d+)\+(\d+\.\d+))( \((.*)\))?$`)
-var regularNodeName = regexp.MustCompile(`^([0-9/GTHP]+) (.*)?\((.*)\)$`)
-var optionsNodeName = regexp.MustCompile(`^([0-9/GTHP]+)(-([A-Z]))? \((.*)\)$`)
+var placemarkName = regexp.MustCompile(`^(EXP-)?([A-Z]{2})-([A-Z&]{2,})-([VAI]?)([12]?)@(\d{2})([PH]?)-(((\d{2})?([A-Z]?)-)?#(\d{3})|((\d+\.\d+)\+(\d+\.\d+))?)( \((.*)\))?$`)
+var regularTerminatorName = regexp.MustCompile(`^([0-9/GTHP]+) (.*)?\((.*)\)$`)
+var optionsTerminatorName = regexp.MustCompile(`^([0-9/GTHP]+)(-([A-Z]))? \((.*)\)$`)
 var waypointSectionFolderName = regexp.MustCompile(`^([0-9/GTHP]+)-.*$`)

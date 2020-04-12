@@ -6,6 +6,23 @@ import (
 
 type Line []Pos
 
+func (l Line) IsClose(p Pos, delta float64) (bool, int) {
+	var found bool
+	var index int
+	var dist float64
+	for i, pos := range l {
+		if !pos.IsClose(p, delta) {
+			continue
+		}
+		if d := pos.Distance(p); !found || d < dist {
+			index = i
+			dist = d
+		}
+		found = true
+	}
+	return found, index
+}
+
 func (l Line) Length() float64 {
 	var total float64
 	for i, pos := range l {
@@ -48,6 +65,11 @@ func MergeLines(lines []Line) Line {
 
 type Pos struct {
 	Lat, Lon, Ele float64
+}
+
+// TODO: optimise this for short distances. Don't need trig?
+func (p1 Pos) IsClose(p2 Pos, km float64) bool {
+	return p1.Distance(p2) < km
 }
 
 // distance in km to another location (only considering lat and lon)

@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"sort"
 )
 
 func buildRoutes(data *Data) error {
@@ -16,28 +15,32 @@ func buildRoutes(data *Data) error {
 				code = "RP"
 			}
 			for _, track := range section.Tracks {
+				regular := bundle.Regular[RegularKey{Direction: track.Direction}]
 				if track.Code == "RR" || track.Code == code {
 					for _, segment := range track.Segments {
-						bundle.Regular.Segments = append(bundle.Regular.Segments, segment)
+						regular.Segments = append(regular.Segments, segment.DuplicateForTrack())
 					}
 				}
 				if packrafting && track.Code == "RH" && len(track.Segments) > 0 {
-					key := OptionalKey{Alternatives: true}
+					key := OptionalKey{Alternatives: true, Direction: track.Direction}
 					if bundle.Options[key] == nil {
 						bundle.Options[key] = &Route{
+							Regular:     false,
 							Section:     section,
-							Hiking:      false,
 							Packrafting: true,
-							Key:         key,
+							OptionalKey: key,
 						}
 					}
 					for _, segment := range track.Segments {
-						bundle.Options[key].Segments = append(bundle.Options[key].Segments, segment)
+						bundle.Options[key].Segments = append(bundle.Options[key].Segments, segment.DuplicateForTrack())
 					}
 				}
 			}
 			// order the segments by From km
-			sort.Slice(bundle.Regular.Segments, func(i, j int) bool { return bundle.Regular.Segments[i].From < bundle.Regular.Segments[j].From })
+			// TODO: why?
+			//for _, route := range bundle.Regular {
+			//	sort.Slice(route.Segments, func(i, j int) bool { return route.Segments[i].From < route.Segments[j].From })
+			//}
 
 			// optional routes
 			optionalRoutes := map[OptionalKey]*Route{}
@@ -49,12 +52,14 @@ func buildRoutes(data *Data) error {
 					key := OptionalKey{Option: track.Option, Variant: segment.Variant}
 					if optionalRoutes[key] == nil {
 						optionalRoutes[key] = &Route{
-							Section: section,
-							Key:     key,
-							Name:    track.Name,
+							Regular:     false,
+							Section:     section,
+							Packrafting: packrafting,
+							OptionalKey: key,
+							Name:        track.Name,
 						}
 					}
-					optionalRoutes[key].Segments = append(optionalRoutes[key].Segments, segment)
+					optionalRoutes[key].Segments = append(optionalRoutes[key].Segments, segment.DuplicateForTrack())
 				}
 			}
 			for key, route := range optionalRoutes {
@@ -62,7 +67,7 @@ func buildRoutes(data *Data) error {
 				if !packrafting {
 					// for hiking bundle, only include optional routes if they have no segments with packrafting terrain
 					for _, segment := range route.Segments {
-						if IsPackrafting(segment.Terrain) {
+						if HasPackrafting(segment.Terrains) {
 							include = false
 							break
 						}
@@ -74,25 +79,43 @@ func buildRoutes(data *Data) error {
 			}
 		}
 
-		// packrafting-only sections don't have a hiking bundle
-		if section.Key.Suffix != "P" {
-			section.Hiking = &Bundle{
-				Regular: &Route{Section: section, Hiking: true},
+		newBundle := func(packrafting bool) *Bundle {
+			routes := map[RegularKey]*Route{}
+			for _, track := range section.Tracks {
+				if track.Optional {
+					continue
+				}
+				key := RegularKey{Direction: track.Direction}
+				if routes[key] == nil {
+					routes[key] = &Route{
+						Section:     section,
+						Regular:     true,
+						RegularKey:  key,
+						Hiking:      !packrafting,
+						Packrafting: packrafting,
+					}
+				}
+			}
+			return &Bundle{
+				Regular: routes,
 				Options: map[OptionalKey]*Route{},
 			}
+		}
+
+		// packrafting-only sections don't have a hiking bundle
+		if section.Key.Suffix != "P" {
+			section.Hiking = newBundle(false)
 			buildBundle(section.Hiking, false)
 		}
 
 		// all sections have a packrafting bundle
-		section.Packrafting = &Bundle{
-			Regular: &Route{Section: section, Packrafting: true},
-			Options: map[OptionalKey]*Route{},
-		}
+		section.Packrafting = newBundle(true)
 		buildBundle(section.Packrafting, true)
 	}
 
 	for _, key := range data.Keys {
 		section := data.Sections[key]
+		fmt.Println("Processing", section.String())
 		if section.Hiking != nil {
 			if err := section.Hiking.Post(); err != nil {
 				return fmt.Errorf("post build for GPT%v hiking bundle: %w", section.Key.Code(), err)
@@ -104,5 +127,29 @@ func buildRoutes(data *Data) error {
 			}
 		}
 	}
+
+	//ioutil.WriteFile("./debug.txt", []byte(debugString), 0666)
+
+	var count int
+	for _, key := range data.Keys {
+		section := data.Sections[key]
+		if section.Hiking != nil {
+			for _, route := range section.Hiking.Regular {
+				count += len(route.Networks)
+			}
+			for _, route := range section.Hiking.Options {
+				count += len(route.Networks)
+			}
+		}
+		if section.Packrafting != nil {
+			for _, route := range section.Packrafting.Regular {
+				count += len(route.Networks)
+			}
+			for _, route := range section.Packrafting.Options {
+				count += len(route.Networks)
+			}
+		}
+	}
+
 	return nil
 }

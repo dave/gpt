@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/dave/gpt/geo"
 	"github.com/dave/gpt/gpx"
@@ -51,16 +52,16 @@ func saveKmlWaypoints(data *Data, dpath string, stamp string) error {
 		Open: 1,
 	}
 
-	for _, node := range data.Nodes {
+	for _, terminator := range data.Terminators {
 		var folder *kml.Folder
-		if node.Option == "" {
+		if terminator.Option == "" {
 			folder = regularStartFolder
 		} else {
 			folder = optionalStartFolder
 		}
 		folder.Placemarks = append(folder.Placemarks, &kml.Placemark{
-			Name:  node.String(),
-			Point: kml.PosPoint(node.Pos),
+			Name:  terminator.String(),
+			Point: kml.PosPoint(terminator.Pos),
 		})
 	}
 
@@ -324,409 +325,409 @@ func saveGpx(data *Data, dpath string, stamp string) error {
 		{
 			path: []string{"Exploration Hiking Tracks", "Optional Tracks", "EXP-OH-LD-A.gpx"},
 			match: func(s *Segment) bool {
-				return s.Experimental && s.Code == "OH" && !IsPackrafting(s.Terrain) && s.Verification == "A"
+				return s.Experimental && s.Code == "OH" && !HasPackrafting(s.Terrains) && s.Verification == "A"
 			},
 		},
 		{
 			path: []string{"Exploration Hiking Tracks", "Optional Tracks", "EXP-OH-LD-I.gpx"},
 			match: func(s *Segment) bool {
-				return s.Experimental && s.Code == "OH" && !IsPackrafting(s.Terrain) && s.Verification == "I"
+				return s.Experimental && s.Code == "OH" && !HasPackrafting(s.Terrains) && s.Verification == "I"
 			},
 		},
 		{
 			path: []string{"Exploration Hiking Tracks", "Optional Tracks", "EXP-OH-LD-V.gpx"},
 			match: func(s *Segment) bool {
-				return s.Experimental && s.Code == "OH" && !IsPackrafting(s.Terrain) && s.Verification == "V"
+				return s.Experimental && s.Code == "OH" && !HasPackrafting(s.Terrains) && s.Verification == "V"
 			},
 		},
 
 		{
 			path: []string{"Exploration Hiking Tracks", "Regular Tracks", "EXP-RH-LD-A.gpx"},
 			match: func(s *Segment) bool {
-				return s.Experimental && s.Code == "RH" && !IsPackrafting(s.Terrain) && s.Verification == "A"
+				return s.Experimental && s.Code == "RH" && !HasPackrafting(s.Terrains) && s.Verification == "A"
 			},
 		},
 		{
 			path: []string{"Exploration Hiking Tracks", "Regular Tracks", "EXP-RH-LD-I.gpx"},
 			match: func(s *Segment) bool {
-				return s.Experimental && s.Code == "RH" && !IsPackrafting(s.Terrain) && s.Verification == "I"
+				return s.Experimental && s.Code == "RH" && !HasPackrafting(s.Terrains) && s.Verification == "I"
 			},
 		},
 		{
 			path: []string{"Exploration Hiking Tracks", "Regular Tracks", "EXP-RH-LD-V.gpx"},
 			match: func(s *Segment) bool {
-				return s.Experimental && s.Code == "RH" && !IsPackrafting(s.Terrain) && s.Verification == "V"
+				return s.Experimental && s.Code == "RH" && !HasPackrafting(s.Terrains) && s.Verification == "V"
 			},
 		},
 
 		{
 			path: []string{"Exploration Packrafting Tracks", "Optional Tracks", "EXP-OH-LD-A.gpx"},
 			match: func(s *Segment) bool {
-				return s.Experimental && s.Code == "OH" && !IsPackrafting(s.Terrain) && s.Verification == "A"
+				return s.Experimental && s.Code == "OH" && !HasPackrafting(s.Terrains) && s.Verification == "A"
 			},
 		},
 		{
 			path: []string{"Exploration Packrafting Tracks", "Optional Tracks", "EXP-OH-LD-I.gpx"},
 			match: func(s *Segment) bool {
-				return s.Experimental && s.Code == "OH" && !IsPackrafting(s.Terrain) && s.Verification == "I"
+				return s.Experimental && s.Code == "OH" && !HasPackrafting(s.Terrains) && s.Verification == "I"
 			},
 		},
 		{
 			path: []string{"Exploration Packrafting Tracks", "Optional Tracks", "EXP-OH-LD-V.gpx"},
 			match: func(s *Segment) bool {
-				return s.Experimental && s.Code == "OH" && !IsPackrafting(s.Terrain) && s.Verification == "V"
+				return s.Experimental && s.Code == "OH" && !HasPackrafting(s.Terrains) && s.Verification == "V"
 			},
 		},
 		{
 			path: []string{"Exploration Packrafting Tracks", "Optional Tracks", "EXP-OP-LD-A.gpx"},
 			match: func(s *Segment) bool {
-				return s.Experimental && s.Code == "OP" && !IsPackrafting(s.Terrain) && s.Verification == "A"
+				return s.Experimental && s.Code == "OP" && !HasPackrafting(s.Terrains) && s.Verification == "A"
 			},
 		},
 		{
 			path: []string{"Exploration Packrafting Tracks", "Optional Tracks", "EXP-OP-LD-I.gpx"},
 			match: func(s *Segment) bool {
-				return s.Experimental && s.Code == "OP" && !IsPackrafting(s.Terrain) && s.Verification == "I"
+				return s.Experimental && s.Code == "OP" && !HasPackrafting(s.Terrains) && s.Verification == "I"
 			},
 		},
 		{
 			path: []string{"Exploration Packrafting Tracks", "Optional Tracks", "EXP-OP-LD-V.gpx"},
 			match: func(s *Segment) bool {
-				return s.Experimental && s.Code == "OP" && !IsPackrafting(s.Terrain) && s.Verification == "V"
+				return s.Experimental && s.Code == "OP" && !HasPackrafting(s.Terrains) && s.Verification == "V"
 			},
 		},
 		{
 			path: []string{"Exploration Packrafting Tracks", "Optional Tracks", "EXP-OP-WR-1.gpx"},
 			match: func(s *Segment) bool {
-				return s.Experimental && s.Code == "OP" && IsPackrafting(s.Terrain) && s.Directional == "1"
+				return s.Experimental && s.Code == "OP" && HasPackrafting(s.Terrains) && s.Directional == "1"
 			},
 		},
 		{
 			path: []string{"Exploration Packrafting Tracks", "Optional Tracks", "EXP-OP-WR-2.gpx"},
 			match: func(s *Segment) bool {
-				return s.Experimental && s.Code == "OP" && IsPackrafting(s.Terrain) && s.Directional == "2"
+				return s.Experimental && s.Code == "OP" && HasPackrafting(s.Terrains) && s.Directional == "2"
 			},
 		},
 
 		{
 			path: []string{"Exploration Packrafting Tracks", "Optional Tracks", "EXP-RH-LD-A.gpx"},
 			match: func(s *Segment) bool {
-				return s.Experimental && s.Code == "RH" && !IsPackrafting(s.Terrain) && s.Verification == "A"
+				return s.Experimental && s.Code == "RH" && !HasPackrafting(s.Terrains) && s.Verification == "A"
 			},
 		},
 		{
 			path: []string{"Exploration Packrafting Tracks", "Optional Tracks", "EXP-RH-LD-I.gpx"},
 			match: func(s *Segment) bool {
-				return s.Experimental && s.Code == "RH" && !IsPackrafting(s.Terrain) && s.Verification == "I"
+				return s.Experimental && s.Code == "RH" && !HasPackrafting(s.Terrains) && s.Verification == "I"
 			},
 		},
 		{
 			path: []string{"Exploration Packrafting Tracks", "Optional Tracks", "EXP-RH-LD-V.gpx"},
 			match: func(s *Segment) bool {
-				return s.Experimental && s.Code == "RH" && !IsPackrafting(s.Terrain) && s.Verification == "V"
+				return s.Experimental && s.Code == "RH" && !HasPackrafting(s.Terrains) && s.Verification == "V"
 			},
 		},
 
 		{
 			path: []string{"Exploration Packrafting Tracks", "Regular Tracks", "EXP-RP-LD-A.gpx"},
 			match: func(s *Segment) bool {
-				return s.Experimental && s.Code == "RP" && !IsPackrafting(s.Terrain) && s.Verification == "A"
+				return s.Experimental && s.Code == "RP" && !HasPackrafting(s.Terrains) && s.Verification == "A"
 			},
 		},
 		{
 			path: []string{"Exploration Packrafting Tracks", "Regular Tracks", "EXP-RP-LD-I.gpx"},
 			match: func(s *Segment) bool {
-				return s.Experimental && s.Code == "RP" && !IsPackrafting(s.Terrain) && s.Verification == "I"
+				return s.Experimental && s.Code == "RP" && !HasPackrafting(s.Terrains) && s.Verification == "I"
 			},
 		},
 		{
 			path: []string{"Exploration Packrafting Tracks", "Regular Tracks", "EXP-RP-LD-V.gpx"},
 			match: func(s *Segment) bool {
-				return s.Experimental && s.Code == "RP" && !IsPackrafting(s.Terrain) && s.Verification == "V"
+				return s.Experimental && s.Code == "RP" && !HasPackrafting(s.Terrains) && s.Verification == "V"
 			},
 		},
 		{
 			path: []string{"Exploration Packrafting Tracks", "Regular Tracks", "EXP-RP-WR-1.gpx"},
 			match: func(s *Segment) bool {
-				return s.Experimental && s.Code == "RP" && IsPackrafting(s.Terrain) && s.Directional == "1"
+				return s.Experimental && s.Code == "RP" && HasPackrafting(s.Terrains) && s.Directional == "1"
 			},
 		},
 		{
 			path: []string{"Exploration Packrafting Tracks", "Regular Tracks", "EXP-RP-WR-2.gpx"},
 			match: func(s *Segment) bool {
-				return s.Experimental && s.Code == "RP" && IsPackrafting(s.Terrain) && s.Directional == "2"
+				return s.Experimental && s.Code == "RP" && HasPackrafting(s.Terrains) && s.Directional == "2"
 			},
 		},
 
 		{
 			path: []string{"Hiking Tracks", "Optional Tracks", "OH-FY-1.gpx"},
 			match: func(s *Segment) bool {
-				return !s.Experimental && s.Code == "OH" && s.Terrain == "FY" && s.Directional == "1"
+				return !s.Experimental && s.Code == "OH" && HasFerry(s.Terrains) && s.Directional == "1"
 			},
 		},
 		{
 			path: []string{"Hiking Tracks", "Optional Tracks", "OH-FY-2.gpx"},
 			match: func(s *Segment) bool {
-				return !s.Experimental && s.Code == "OH" && s.Terrain == "FY" && s.Directional == "2"
+				return !s.Experimental && s.Code == "OH" && HasFerry(s.Terrains) && s.Directional == "2"
 			},
 		},
 		{
 			path: []string{"Hiking Tracks", "Optional Tracks", "OH-LD-A.gpx"},
 			match: func(s *Segment) bool {
-				return !s.Experimental && s.Code == "OH" && !IsPackrafting(s.Terrain) && s.Verification == "A"
+				return !s.Experimental && s.Code == "OH" && !HasPackrafting(s.Terrains) && s.Verification == "A"
 			},
 		},
 		{
 			path: []string{"Hiking Tracks", "Optional Tracks", "OH-LD-I.gpx"},
 			match: func(s *Segment) bool {
-				return !s.Experimental && s.Code == "OH" && !IsPackrafting(s.Terrain) && s.Verification == "I"
+				return !s.Experimental && s.Code == "OH" && !HasPackrafting(s.Terrains) && s.Verification == "I"
 			},
 		},
 		{
 			path: []string{"Hiking Tracks", "Optional Tracks", "OH-LD-V.gpx"},
 			match: func(s *Segment) bool {
-				return !s.Experimental && s.Code == "OH" && !IsPackrafting(s.Terrain) && s.Verification == "V"
+				return !s.Experimental && s.Code == "OH" && !HasPackrafting(s.Terrains) && s.Verification == "V"
 			},
 		},
 
 		{
 			path: []string{"Hiking Tracks", "Regular Tracks", "RH-FY-1.gpx"},
 			match: func(s *Segment) bool {
-				return !s.Experimental && s.Code == "RH" && s.Terrain == "FY" && s.Directional == "1"
+				return !s.Experimental && s.Code == "RH" && HasFerry(s.Terrains) && s.Directional == "1"
 			},
 		},
 		{
 			path: []string{"Hiking Tracks", "Regular Tracks", "RH-FY-2.gpx"},
 			match: func(s *Segment) bool {
-				return !s.Experimental && s.Code == "RH" && s.Terrain == "FY" && s.Directional == "2"
+				return !s.Experimental && s.Code == "RH" && HasFerry(s.Terrains) && s.Directional == "2"
 			},
 		},
 		{
 			path: []string{"Hiking Tracks", "Regular Tracks", "RH-LD-A.gpx"},
 			match: func(s *Segment) bool {
-				return !s.Experimental && s.Code == "RH" && !IsPackrafting(s.Terrain) && s.Verification == "A"
+				return !s.Experimental && s.Code == "RH" && !HasPackrafting(s.Terrains) && s.Verification == "A"
 			},
 		},
 		{
 			path: []string{"Hiking Tracks", "Regular Tracks", "RH-LD-I.gpx"},
 			match: func(s *Segment) bool {
-				return !s.Experimental && s.Code == "RH" && !IsPackrafting(s.Terrain) && s.Verification == "I"
+				return !s.Experimental && s.Code == "RH" && !HasPackrafting(s.Terrains) && s.Verification == "I"
 			},
 		},
 		{
 			path: []string{"Hiking Tracks", "Regular Tracks", "RH-LD-V.gpx"},
 			match: func(s *Segment) bool {
-				return !s.Experimental && s.Code == "RH" && !IsPackrafting(s.Terrain) && s.Verification == "V"
+				return !s.Experimental && s.Code == "RH" && !HasPackrafting(s.Terrains) && s.Verification == "V"
 			},
 		},
 
 		{
 			path: []string{"Hiking Tracks", "Regular Tracks", "RR-FY-1.gpx"},
 			match: func(s *Segment) bool {
-				return !s.Experimental && s.Code == "RR" && s.Terrain == "FY" && s.Directional == "1"
+				return !s.Experimental && s.Code == "RR" && HasFerry(s.Terrains) && s.Directional == "1"
 			},
 		},
 		{
 			path: []string{"Hiking Tracks", "Regular Tracks", "RR-FY-2.gpx"},
 			match: func(s *Segment) bool {
-				return !s.Experimental && s.Code == "RR" && s.Terrain == "FY" && s.Directional == "2"
+				return !s.Experimental && s.Code == "RR" && HasFerry(s.Terrains) && s.Directional == "2"
 			},
 		},
 		{
 			path: []string{"Hiking Tracks", "Regular Tracks", "RR-LD-A.gpx"},
 			match: func(s *Segment) bool {
-				return !s.Experimental && s.Code == "RR" && !IsPackrafting(s.Terrain) && s.Verification == "A"
+				return !s.Experimental && s.Code == "RR" && !HasPackrafting(s.Terrains) && s.Verification == "A"
 			},
 		},
 		{
 			path: []string{"Hiking Tracks", "Regular Tracks", "RR-LD-I.gpx"},
 			match: func(s *Segment) bool {
-				return !s.Experimental && s.Code == "RR" && !IsPackrafting(s.Terrain) && s.Verification == "I"
+				return !s.Experimental && s.Code == "RR" && !HasPackrafting(s.Terrains) && s.Verification == "I"
 			},
 		},
 		{
 			path: []string{"Hiking Tracks", "Regular Tracks", "RR-LD-V.gpx"},
 			match: func(s *Segment) bool {
-				return !s.Experimental && s.Code == "RR" && !IsPackrafting(s.Terrain) && s.Verification == "V"
+				return !s.Experimental && s.Code == "RR" && !HasPackrafting(s.Terrains) && s.Verification == "V"
 			},
 		},
 
 		{
 			path: []string{"Packrafting Tracks", "Optional Tracks", "OH-FY-1.gpx"},
 			match: func(s *Segment) bool {
-				return !s.Experimental && s.Code == "OH" && s.Terrain == "FY" && s.Directional == "1"
+				return !s.Experimental && s.Code == "OH" && HasFerry(s.Terrains) && s.Directional == "1"
 			},
 		},
 		{
 			path: []string{"Packrafting Tracks", "Optional Tracks", "OH-FY-2.gpx"},
 			match: func(s *Segment) bool {
-				return !s.Experimental && s.Code == "OH" && s.Terrain == "FY" && s.Directional == "2"
+				return !s.Experimental && s.Code == "OH" && HasFerry(s.Terrains) && s.Directional == "2"
 			},
 		},
 		{
 			path: []string{"Packrafting Tracks", "Optional Tracks", "OH-LD-A.gpx"},
 			match: func(s *Segment) bool {
-				return !s.Experimental && s.Code == "OH" && !IsPackrafting(s.Terrain) && s.Verification == "A"
+				return !s.Experimental && s.Code == "OH" && !HasPackrafting(s.Terrains) && s.Verification == "A"
 			},
 		},
 		{
 			path: []string{"Packrafting Tracks", "Optional Tracks", "OH-LD-I.gpx"},
 			match: func(s *Segment) bool {
-				return !s.Experimental && s.Code == "OH" && !IsPackrafting(s.Terrain) && s.Verification == "I"
+				return !s.Experimental && s.Code == "OH" && !HasPackrafting(s.Terrains) && s.Verification == "I"
 			},
 		},
 		{
 			path: []string{"Packrafting Tracks", "Optional Tracks", "OH-LD-V.gpx"},
 			match: func(s *Segment) bool {
-				return !s.Experimental && s.Code == "OH" && !IsPackrafting(s.Terrain) && s.Verification == "V"
+				return !s.Experimental && s.Code == "OH" && !HasPackrafting(s.Terrains) && s.Verification == "V"
 			},
 		},
 
 		{
 			path: []string{"Packrafting Tracks", "Optional Tracks", "OP-FY-1.gpx"},
 			match: func(s *Segment) bool {
-				return !s.Experimental && s.Code == "OP" && s.Terrain == "FY" && s.Directional == "1"
+				return !s.Experimental && s.Code == "OP" && HasFerry(s.Terrains) && s.Directional == "1"
 			},
 		},
 		{
 			path: []string{"Packrafting Tracks", "Optional Tracks", "OP-FY-2.gpx"},
 			match: func(s *Segment) bool {
-				return !s.Experimental && s.Code == "OP" && s.Terrain == "FY" && s.Directional == "2"
+				return !s.Experimental && s.Code == "OP" && HasFerry(s.Terrains) && s.Directional == "2"
 			},
 		},
 		{
 			path: []string{"Packrafting Tracks", "Optional Tracks", "OP-LD-A.gpx"},
 			match: func(s *Segment) bool {
-				return !s.Experimental && s.Code == "OP" && !IsPackrafting(s.Terrain) && s.Verification == "A"
+				return !s.Experimental && s.Code == "OP" && !HasPackrafting(s.Terrains) && s.Verification == "A"
 			},
 		},
 		{
 			path: []string{"Packrafting Tracks", "Optional Tracks", "OP-LD-I.gpx"},
 			match: func(s *Segment) bool {
-				return !s.Experimental && s.Code == "OP" && !IsPackrafting(s.Terrain) && s.Verification == "I"
+				return !s.Experimental && s.Code == "OP" && !HasPackrafting(s.Terrains) && s.Verification == "I"
 			},
 		},
 		{
 			path: []string{"Packrafting Tracks", "Optional Tracks", "OP-LD-V.gpx"},
 			match: func(s *Segment) bool {
-				return !s.Experimental && s.Code == "OP" && !IsPackrafting(s.Terrain) && s.Verification == "V"
+				return !s.Experimental && s.Code == "OP" && !HasPackrafting(s.Terrains) && s.Verification == "V"
 			},
 		},
 		{
 			path: []string{"Packrafting Tracks", "Optional Tracks", "OP-WR-1.gpx"},
 			match: func(s *Segment) bool {
-				return !s.Experimental && s.Code == "OP" && IsPackrafting(s.Terrain) && s.Directional == "1"
+				return !s.Experimental && s.Code == "OP" && HasPackrafting(s.Terrains) && s.Directional == "1"
 			},
 		},
 		{
 			path: []string{"Packrafting Tracks", "Optional Tracks", "OP-WR-2.gpx"},
 			match: func(s *Segment) bool {
-				return !s.Experimental && s.Code == "OP" && IsPackrafting(s.Terrain) && s.Directional == "2"
+				return !s.Experimental && s.Code == "OP" && HasPackrafting(s.Terrains) && s.Directional == "2"
 			},
 		},
 
 		{
 			path: []string{"Packrafting Tracks", "Optional Tracks", "RH-FY-1.gpx"},
 			match: func(s *Segment) bool {
-				return !s.Experimental && s.Code == "RH" && s.Terrain == "FY" && s.Directional == "1"
+				return !s.Experimental && s.Code == "RH" && HasFerry(s.Terrains) && s.Directional == "1"
 			},
 		},
 		{
 			path: []string{"Packrafting Tracks", "Optional Tracks", "RH-FY-2.gpx"},
 			match: func(s *Segment) bool {
-				return !s.Experimental && s.Code == "RH" && s.Terrain == "FY" && s.Directional == "2"
+				return !s.Experimental && s.Code == "RH" && HasFerry(s.Terrains) && s.Directional == "2"
 			},
 		},
 		{
 			path: []string{"Packrafting Tracks", "Optional Tracks", "RH-LD-A.gpx"},
 			match: func(s *Segment) bool {
-				return !s.Experimental && s.Code == "RH" && !IsPackrafting(s.Terrain) && s.Verification == "A"
+				return !s.Experimental && s.Code == "RH" && !HasPackrafting(s.Terrains) && s.Verification == "A"
 			},
 		},
 		{
 			path: []string{"Packrafting Tracks", "Optional Tracks", "RH-LD-I.gpx"},
 			match: func(s *Segment) bool {
-				return !s.Experimental && s.Code == "RH" && !IsPackrafting(s.Terrain) && s.Verification == "I"
+				return !s.Experimental && s.Code == "RH" && !HasPackrafting(s.Terrains) && s.Verification == "I"
 			},
 		},
 		{
 			path: []string{"Packrafting Tracks", "Optional Tracks", "RH-LD-V.gpx"},
 			match: func(s *Segment) bool {
-				return !s.Experimental && s.Code == "RH" && !IsPackrafting(s.Terrain) && s.Verification == "V"
+				return !s.Experimental && s.Code == "RH" && !HasPackrafting(s.Terrains) && s.Verification == "V"
 			},
 		},
 
 		{
 			path: []string{"Packrafting Tracks", "Regular Tracks", "RP-FY-1.gpx"},
 			match: func(s *Segment) bool {
-				return !s.Experimental && s.Code == "RP" && s.Terrain == "FY" && s.Directional == "1"
+				return !s.Experimental && s.Code == "RP" && HasFerry(s.Terrains) && s.Directional == "1"
 			},
 		},
 		{
 			path: []string{"Packrafting Tracks", "Regular Tracks", "RP-FY-2.gpx"},
 			match: func(s *Segment) bool {
-				return !s.Experimental && s.Code == "RP" && s.Terrain == "FY" && s.Directional == "2"
+				return !s.Experimental && s.Code == "RP" && HasFerry(s.Terrains) && s.Directional == "2"
 			},
 		},
 		{
 			path: []string{"Packrafting Tracks", "Regular Tracks", "RP-LD-A.gpx"},
 			match: func(s *Segment) bool {
-				return !s.Experimental && s.Code == "RP" && !IsPackrafting(s.Terrain) && s.Verification == "A"
+				return !s.Experimental && s.Code == "RP" && !HasPackrafting(s.Terrains) && s.Verification == "A"
 			},
 		},
 		{
 			path: []string{"Packrafting Tracks", "Regular Tracks", "RP-LD-I.gpx"},
 			match: func(s *Segment) bool {
-				return !s.Experimental && s.Code == "RP" && !IsPackrafting(s.Terrain) && s.Verification == "I"
+				return !s.Experimental && s.Code == "RP" && !HasPackrafting(s.Terrains) && s.Verification == "I"
 			},
 		},
 		{
 			path: []string{"Packrafting Tracks", "Regular Tracks", "RP-LD-V.gpx"},
 			match: func(s *Segment) bool {
-				return !s.Experimental && s.Code == "RP" && !IsPackrafting(s.Terrain) && s.Verification == "V"
+				return !s.Experimental && s.Code == "RP" && !HasPackrafting(s.Terrains) && s.Verification == "V"
 			},
 		},
 		{
 			path: []string{"Packrafting Tracks", "Regular Tracks", "RP-WR-1.gpx"},
 			match: func(s *Segment) bool {
-				return !s.Experimental && s.Code == "RP" && IsPackrafting(s.Terrain) && s.Directional == "1"
+				return !s.Experimental && s.Code == "RP" && HasPackrafting(s.Terrains) && s.Directional == "1"
 			},
 		},
 		{
 			path: []string{"Packrafting Tracks", "Regular Tracks", "RP-WR-2.gpx"},
 			match: func(s *Segment) bool {
-				return !s.Experimental && s.Code == "RP" && IsPackrafting(s.Terrain) && s.Directional == "2"
+				return !s.Experimental && s.Code == "RP" && HasPackrafting(s.Terrains) && s.Directional == "2"
 			},
 		},
 
 		{
 			path: []string{"Packrafting Tracks", "Regular Tracks", "RR-FY-1.gpx"},
 			match: func(s *Segment) bool {
-				return !s.Experimental && s.Code == "RR" && s.Terrain == "FY" && s.Directional == "1"
+				return !s.Experimental && s.Code == "RR" && HasFerry(s.Terrains) && s.Directional == "1"
 			},
 		},
 		{
 			path: []string{"Packrafting Tracks", "Regular Tracks", "RR-FY-2.gpx"},
 			match: func(s *Segment) bool {
-				return !s.Experimental && s.Code == "RR" && s.Terrain == "FY" && s.Directional == "2"
+				return !s.Experimental && s.Code == "RR" && HasFerry(s.Terrains) && s.Directional == "2"
 			},
 		},
 		{
 			path: []string{"Packrafting Tracks", "Regular Tracks", "RR-LD-A.gpx"},
 			match: func(s *Segment) bool {
-				return !s.Experimental && s.Code == "RR" && !IsPackrafting(s.Terrain) && s.Verification == "A"
+				return !s.Experimental && s.Code == "RR" && !HasPackrafting(s.Terrains) && s.Verification == "A"
 			},
 		},
 		{
 			path: []string{"Packrafting Tracks", "Regular Tracks", "RR-LD-I.gpx"},
 			match: func(s *Segment) bool {
-				return !s.Experimental && s.Code == "RR" && !IsPackrafting(s.Terrain) && s.Verification == "I"
+				return !s.Experimental && s.Code == "RR" && !HasPackrafting(s.Terrains) && s.Verification == "I"
 			},
 		},
 		{
 			path: []string{"Packrafting Tracks", "Regular Tracks", "RR-LD-V.gpx"},
 			match: func(s *Segment) bool {
-				return !s.Experimental && s.Code == "RR" && !IsPackrafting(s.Terrain) && s.Verification == "V"
+				return !s.Experimental && s.Code == "RR" && !HasPackrafting(s.Terrains) && s.Verification == "V"
 			},
 		},
 	}
@@ -823,25 +824,25 @@ func saveGpx(data *Data, dpath string, stamp string) error {
 		return fmt.Errorf("saving waypoints: %w", err)
 	}
 
-	wpRegNode := gpx.Root{}
-	wpOptNode := gpx.Root{}
-	for _, node := range data.Nodes {
-		if node.Option == "" {
-			wpRegNode.Waypoints = append(wpRegNode.Waypoints, gpx.Waypoint{
-				Point: gpx.PosPoint(node.Pos),
-				Name:  node.String(),
+	wpRegTerminators := gpx.Root{}
+	wpOptTerminators := gpx.Root{}
+	for _, t := range data.Terminators {
+		if t.Option == "" {
+			wpRegTerminators.Waypoints = append(wpRegTerminators.Waypoints, gpx.Waypoint{
+				Point: gpx.PosPoint(t.Pos),
+				Name:  t.String(),
 			})
 		} else {
-			wpOptNode.Waypoints = append(wpOptNode.Waypoints, gpx.Waypoint{
-				Point: gpx.PosPoint(node.Pos),
-				Name:  node.String(),
+			wpOptTerminators.Waypoints = append(wpOptTerminators.Waypoints, gpx.Waypoint{
+				Point: gpx.PosPoint(t.Pos),
+				Name:  t.String(),
 			})
 		}
 	}
-	if err := wpRegNode.Save(filepath.Join(dpath, "GPX Files (For Smartphones and Basecamp)", "Waypoints", fmt.Sprintf("Regular Start and End Points (%s).gpx", stamp))); err != nil {
+	if err := wpRegTerminators.Save(filepath.Join(dpath, "GPX Files (For Smartphones and Basecamp)", "Waypoints", fmt.Sprintf("Regular Start and End Points (%s).gpx", stamp))); err != nil {
 		return fmt.Errorf("saving waypoints: %w", err)
 	}
-	if err := wpOptNode.Save(filepath.Join(dpath, "GPX Files (For Smartphones and Basecamp)", "Waypoints", fmt.Sprintf("Optional Start and End Points (%s).gpx", stamp))); err != nil {
+	if err := wpOptTerminators.Save(filepath.Join(dpath, "GPX Files (For Smartphones and Basecamp)", "Waypoints", fmt.Sprintf("Optional Start and End Points (%s).gpx", stamp))); err != nil {
 		return fmt.Errorf("saving waypoints: %w", err)
 	}
 
@@ -859,7 +860,7 @@ func saveGaia(data *Data, dpath string) error {
 		modes    map[string]map[string]*gpx.Root
 	}
 	newContents := func() map[string]*gpx.Root {
-		return map[string]*gpx.Root{"routes": {}, "options": {}, "markers": {}, "waypoints": {}}
+		return map[string]*gpx.Root{"routes": {}, "options": {}, "routes-markers": {}, "options-markers": {}, "waypoints": {}}
 	}
 	newModes := func() map[string]map[string]*gpx.Root {
 		return map[string]map[string]*gpx.Root{"hiking": newContents(), "packrafting": newContents()}
@@ -895,64 +896,135 @@ func saveGaia(data *Data, dpath string) error {
 				}
 				count[mode] = append(count[mode], section)
 
-				var rte gpx.Route
-				rte.Name = fmt.Sprintf("GPT%v %s", section.Key.Code(), bundle.Regular.Section.Name)
-				var lines []geo.Line
+				for key, route := range bundle.Regular {
+					if len(route.Networks) != 1 {
+						return fmt.Errorf("regular route %s has %d networks. regular routes should only have 1 network", route.Debug(), len(route.Networks))
+					}
+					network := route.Networks[0]
 
-				// Multiple segments are often in series with exactly the same details. If so we combine them into a single
-				// waypoint
-				var groups [][]*Segment
-				for _, segment := range bundle.Regular.Segments {
-					lines = append(lines, segment.Line)
+					var rte gpx.Route
+					var direction string
+					if key.Direction == "N" {
+						direction = " northbound"
+					} else if key.Direction == "S" {
+						direction = " southbound"
+					}
+					rte.Name = fmt.Sprintf("GPT%v %s%s", section.Key.Code(), section.Name, direction)
 
-					if len(groups) > 0 && segment.Similar(groups[len(groups)-1][len(groups[len(groups)-1])-1]) {
-						// segment is similar to the previous one -> add to current group
-						groups[len(groups)-1] = append(groups[len(groups)-1], segment)
-					} else {
-						// segment is not similar -> add a new group
-						groups = append(groups, []*Segment{segment})
+					var lines []geo.Line
+					for _, segment := range network.Segments {
+						lines = append(lines, segment.Line)
+					}
+					straights := buildStraights(network.Segments)
+
+					var id int
+					for i, straight := range straights {
+						if i > 0 {
+							rte.Desc += "---\n"
+						}
+						for _, flush := range straight.Flushes {
+							id++
+							rte.Desc += flush.Description(id, false) + "\n"
+							wp := gpx.Waypoint{
+								Point: gpx.PosPoint(flush.Segments[0].Line.Start()),
+								Name:  flush.Description(id, true),
+								Desc:  rte.Name,
+							}
+							contents["routes-markers"].Waypoints = append(contents["routes-markers"].Waypoints, wp)
+						}
+					}
+
+					rte.Points = gpx.LinePoints(geo.MergeLines(lines))
+					contents["routes"].Routes = append(contents["routes"].Routes, rte)
+
+					if len(network.Extras) > 0 {
+						var trk gpx.Track
+						var direction string
+						if route.OptionalKey.Direction == "N" {
+							direction = " northbound"
+						} else if route.OptionalKey.Direction == "S" {
+							direction = " southbound"
+						}
+						trk.Name = fmt.Sprintf("GPT%v%s extras", route.Section.Key.Code(), direction)
+
+						straights := buildStraights(network.Extras)
+						var id int
+						for i, straight := range straights {
+							if i > 0 {
+								trk.Desc += "---\n"
+							}
+							for _, flush := range straight.Flushes {
+								i++
+								trk.Desc += flush.Description(id, false) + "\n"
+								wp := gpx.Waypoint{
+									Point: gpx.PosPoint(flush.Segments[0].Line.Start()),
+									Name:  flush.Description(id, true),
+									Desc:  trk.Name,
+								}
+								contents["options-markers"].Waypoints = append(contents["options-markers"].Waypoints, wp)
+							}
+						}
+
+						for _, segment := range network.Extras {
+							trk.Segments = append(trk.Segments, gpx.TrackSegment{Points: gpx.LineTrackPoints(segment.Line)})
+						}
+						contents["options"].Tracks = append(contents["options"].Tracks, trk)
 					}
 				}
-				for _, group := range groups {
-
-					wp := gpx.Waypoint{
-						Point: gpx.PosPoint(group[0].Line.Start()),
-					}
-
-					var totalLength float64
-
-					for _, segment := range group {
-
-						rte.Desc += segment.Description() + "\n"
-						wp.Desc += segment.String() + "\n"
-
-						totalLength += segment.Length
-					}
-
-					wp.Name = fmt.Sprintf("GPT%s %s", group[0].Section.Key.Code(), group[0].DescriptionLength(totalLength))
-
-					contents["markers"].Waypoints = append(contents["markers"].Waypoints, wp)
-
-				}
-
-				rte.Points = gpx.LinePoints(geo.MergeLines(lines))
-				contents["routes"].Routes = append(contents["routes"].Routes, rte)
 
 				for _, route := range bundle.Options {
-					var trk gpx.Track
-					if route.Key.Alternatives {
-						trk.Name = fmt.Sprintf("GPT%v hiking alternatives", route.Section.Key.Code())
-					} else if route.Key.Option == 0 {
-						trk.Name = fmt.Sprintf("GPT%v variant %v", route.Section.Key.Code(), route.Key.Code())
-					} else {
-						trk.Name = fmt.Sprintf("GPT%v option %v", route.Section.Key.Code(), route.Key.Code())
+					for i, network := range route.Networks {
+						var networkString string
+						if len(route.Networks) > 1 {
+							networkString = fmt.Sprintf(" (%d/%d)", i+1, len(route.Networks))
+						}
+						var trk gpx.Track
+						if route.OptionalKey.Alternatives {
+							var direction string
+							if route.OptionalKey.Direction == "N" {
+								direction = " northbound"
+							} else if route.OptionalKey.Direction == "S" {
+								direction = " southbound"
+							}
+							trk.Name = fmt.Sprintf("GPT%v%s hiking alternatives%s", route.Section.Key.Code(), direction, networkString)
+						} else if route.OptionalKey.Option == 0 {
+							trk.Name = fmt.Sprintf("GPT%v variant %v%s", route.Section.Key.Code(), route.OptionalKey.Code(), networkString)
+						} else {
+							trk.Name = fmt.Sprintf("GPT%v option %v%s", route.Section.Key.Code(), route.OptionalKey.Code(), networkString)
+						}
+
+						straights := buildStraights(network.Segments)
+						var id int
+						for i, straight := range straights {
+							if i > 0 {
+								trk.Desc += "---\n"
+							}
+							for _, flush := range straight.Flushes {
+								id++
+								trk.Desc += flush.Description(id, false) + "\n"
+								wp := gpx.Waypoint{
+									Point: gpx.PosPoint(flush.Segments[0].Line.Start()),
+									Name:  flush.Description(id, true),
+									Desc:  trk.Name,
+								}
+								contents["options-markers"].Waypoints = append(contents["options-markers"].Waypoints, wp)
+							}
+						}
+
+						for _, segment := range network.Segments {
+							trk.Segments = append(trk.Segments, gpx.TrackSegment{Points: gpx.LineTrackPoints(segment.Line)})
+						}
+						contents["options"].Tracks = append(contents["options"].Tracks, trk)
 					}
-					for _, segment := range route.Segments {
-						trk.Segments = append(trk.Segments, gpx.TrackSegment{Points: gpx.LineTrackPoints(segment.Line)})
-						trk.Desc += segment.Description() + "\n"
-					}
-					contents["options"].Tracks = append(contents["options"].Tracks, trk)
 				}
+
+				// reverse the order of all tracks and routes (better in Gaia like this)
+				//for i, j := 0, len(contents["options"].Tracks)-1; i < j; i, j = i+1, j-1 {
+				//	contents["options"].Tracks[i], contents["options"].Tracks[j] = contents["options"].Tracks[j], contents["options"].Tracks[i]
+				//}
+				//for i, j := 0, len(contents["routes"].Routes)-1; i < j; i, j = i+1, j-1 {
+				//	contents["routes"].Routes[i], contents["routes"].Routes[j] = contents["routes"].Routes[j], contents["routes"].Routes[i]
+				//}
 
 				for _, w := range section.Waypoints {
 					contents["waypoints"].Waypoints = append(contents["waypoints"].Waypoints, gpx.Waypoint{
@@ -966,26 +1038,26 @@ func saveGaia(data *Data, dpath string) error {
 		for mode := range cluster.modes {
 			sections := count[mode]
 		Outer:
-			for _, node := range data.Nodes {
+			for _, terminator := range data.Terminators {
 				for _, section := range sections {
-					for _, key := range node.Sections {
+					for _, key := range terminator.Sections {
 						if key == section.Key {
 							var desc string
-							for i, key := range node.Sections {
+							for i, key := range terminator.Sections {
 								if i > 0 {
 									desc += ", "
 								}
 								desc += fmt.Sprintf("GPT%s", key.Code())
 							}
-							if node.Option != "" {
-								desc += fmt.Sprintf(" option %s", node.Option)
+							if terminator.Option != "" {
+								desc += fmt.Sprintf(" option %s", terminator.Option)
 							}
 							wp := gpx.Waypoint{
-								Point: gpx.PosPoint(node.Pos),
-								Name:  node.Name,
+								Point: gpx.PosPoint(terminator.Pos),
+								Name:  terminator.Name,
 								Desc:  desc,
 							}
-							if node.Option == "" {
+							if terminator.Option == "" {
 								cluster.modes[mode]["routes"].Waypoints = append(cluster.modes[mode]["routes"].Waypoints, wp)
 							} else {
 								cluster.modes[mode]["options"].Waypoints = append(cluster.modes[mode]["options"].Waypoints, wp)
@@ -1001,6 +1073,7 @@ func saveGaia(data *Data, dpath string) error {
 	for _, cluster := range clusters {
 		for mode, modeMap := range cluster.modes {
 			for contents, root := range modeMap {
+
 				name := fmt.Sprintf("%s-%s-%s.gpx", cluster.name, mode, contents)
 				if err := root.Save(filepath.Join(dpath, "GPX Files (For Gaia GPS app)", name)); err != nil {
 					return fmt.Errorf("writing gpx")
@@ -1025,6 +1098,94 @@ func saveGaia(data *Data, dpath string) error {
 		return fmt.Errorf("writing important gpx: %w", err)
 	}
 	return nil
+}
+
+func buildStraights(segments []*Segment) []*Straight {
+	var straights []*Straight
+	newFlush := func(segment *Segment) *Flush {
+		return &Flush{
+			From:         segment.From,
+			Length:       segment.Length,
+			Terrains:     segment.Terrains,
+			Verification: segment.Verification,
+			Directional:  segment.Directional,
+			Experimental: segment.Experimental,
+			Segments:     []*Segment{segment},
+		}
+	}
+	for i, segment := range segments {
+		if i > 0 {
+			prev := segments[i-1]
+			if !prev.EndPoint.Node.Contains(segment.StartPoint) {
+				// new straight
+				straights = append(straights, &Straight{
+					Flushes: []*Flush{newFlush(segment)},
+				})
+			} else if !prev.Similar(segment) {
+				// new flush
+				s := straights[len(straights)-1]
+				s.Flushes = append(s.Flushes, newFlush(segment))
+			}
+		} else {
+			straights = append(straights, &Straight{
+				Flushes: []*Flush{newFlush(segment)},
+			})
+		}
+		s := straights[len(straights)-1]
+		f := s.Flushes[len(s.Flushes)-1]
+		f.Length += segment.Length
+		f.Segments = append(f.Segments, segment)
+	}
+	return straights
+}
+
+type Straight struct {
+	Flushes []*Flush
+}
+
+type Flush struct {
+	From, Length float64
+	Terrains     []string
+	Verification string
+	Directional  string
+	Experimental bool
+	Segments     []*Segment
+}
+
+func (f Flush) Description(id int, waypoint bool) string {
+	var sb strings.Builder
+	if !waypoint {
+		sb.WriteString(fmt.Sprintf("#%d at %.1f km: ", id, f.From))
+	}
+	for i, terrain := range f.Terrains {
+		if i > 0 {
+			sb.WriteString(", ")
+		}
+		sb.WriteString(Terrain(terrain))
+	}
+	properties := f.Properties()
+	if len(properties) > 0 {
+		sb.WriteString(fmt.Sprintf(" (%s)", strings.Join(properties, ", ")))
+	}
+	sb.WriteString(fmt.Sprintf(" for %.1f km", f.Length))
+	if waypoint {
+		sb.WriteString(fmt.Sprintf(" #%d", id))
+	}
+	return sb.String()
+}
+
+func (f Flush) Properties() []string {
+	var properties []string
+	if f.Verification != "" {
+		properties = append(properties, f.Verification)
+	}
+	if f.Directional != "" {
+		properties = append(properties, f.Directional)
+	}
+	if f.Experimental {
+		properties = append(properties, "EXP")
+	}
+	return properties
 }
 
 const Nomenclature = `EXP: Exploration Route

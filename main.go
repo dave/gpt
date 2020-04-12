@@ -13,7 +13,7 @@ import (
 
 var SrtmClient *geoelevations.Srtm
 
-const VERSION = "v0.0.8"
+const VERSION = "v0.0.9"
 
 func main() {
 	if err := Main(); err != nil {
@@ -23,8 +23,7 @@ func main() {
 
 func Main() error {
 
-	tracks := flag.String("tracks", "./All Tracks.kmz", "all tracks file")
-	points := flag.String("points", "./All Points.kmz", "all points file")
+	input := flag.String("input", "./GPT Master.kmz", "input file")
 	ele := flag.Bool("ele", true, "lookup elevations")
 	output := flag.String("output", "./output", "output dir")
 	stamp := flag.String("stamp", fmt.Sprintf("%04d%02d%02d", time.Now().Year(), time.Now().Month(), time.Now().Day()), "date stamp for output files")
@@ -44,17 +43,12 @@ func Main() error {
 		}
 	}
 
-	tracksRoot, err := kml.Load(*tracks)
+	inputRoot, err := kml.Load(*input)
 	if err != nil {
 		return fmt.Errorf("loading tracks kmz: %w", err)
 	}
 
-	pointsRoot, err := kml.Load(*points)
-	if err != nil {
-		return fmt.Errorf("loading points kmz: %w", err)
-	}
-
-	data, err := scanKml(tracksRoot, pointsRoot, *ele)
+	data, err := scanKml(inputRoot, *ele)
 	if err != nil {
 		return fmt.Errorf("scanning kml: %w", err)
 	}
