@@ -14,6 +14,7 @@ import (
 var SrtmClient *geoelevations.Srtm
 
 const VERSION = "v0.0.9"
+const DELTA = 0.075 // see https://docs.google.com/spreadsheets/d/1q610i2TkfUTHWvtqVAJ0V8zFtzPMQKBXEm7jiPyuDCQ/edit
 
 func main() {
 	if err := Main(); err != nil {
@@ -48,28 +49,29 @@ func Main() error {
 		return fmt.Errorf("loading tracks kmz: %w", err)
 	}
 
-	data, err := scanKml(inputRoot, *ele)
-	if err != nil {
+	data := &Data{Sections: map[SectionKey]*Section{}}
+
+	if err := data.Scan(inputRoot, *ele); err != nil {
 		return fmt.Errorf("scanning kml: %w", err)
 	}
 
-	if err := buildRoutes(data); err != nil {
+	if err := data.BuildRoutes(); err != nil {
 		return fmt.Errorf("building routes: %w", err)
 	}
 
-	if err := saveGaia(data, *output); err != nil {
+	if err := data.SaveGaia(*output); err != nil {
 		return fmt.Errorf("saving gaia files: %w", err)
 	}
 
-	if err := saveGpx(data, *output, *stamp); err != nil {
+	if err := data.SaveGpx(*output, *stamp); err != nil {
 		return fmt.Errorf("saving generic gps files: %w", err)
 	}
 
-	if err := saveKmlTracks(data, *output, *stamp); err != nil {
+	if err := data.SaveKmlTracks(*output, *stamp); err != nil {
 		return fmt.Errorf("saving generic gps files: %w", err)
 	}
 
-	if err := saveKmlWaypoints(data, *output, *stamp); err != nil {
+	if err := data.SaveKmlWaypoints(*output, *stamp); err != nil {
 		return fmt.Errorf("saving generic gps files: %w", err)
 	}
 	return nil
