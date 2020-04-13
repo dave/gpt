@@ -74,7 +74,7 @@ type OptionalKey struct {
 
 func (k OptionalKey) Code() string {
 	if k.Option > 0 {
-		return fmt.Sprintf("%02d%s", k.Option, k.Variant)
+		return fmt.Sprintf("%d%s", k.Option, k.Variant)
 	}
 	return k.Variant
 }

@@ -14,7 +14,7 @@ import (
 
 var SrtmClient *geoelevations.Srtm
 
-const VERSION = "v0.0.11"
+const VERSION = "v0.0.12"
 const DELTA = 0.075 // see https://docs.google.com/spreadsheets/d/1q610i2TkfUTHWvtqVAJ0V8zFtzPMQKBXEm7jiPyuDCQ/edit
 
 func main() {
