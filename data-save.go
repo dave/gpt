@@ -12,7 +12,9 @@ import (
 )
 
 func (d *Data) SaveKmlWaypoints(dpath string, stamp string) error {
-	fmt.Println("Saving kml waypoints")
+	if LOG {
+		fmt.Println("Saving kml waypoints")
+	}
 	/*
 		debug("/Users/dave/src/gpt/input/Track Files/KMZ File (For Google Earth and Smartphones)/Waypoints/All Points.kmz", "input-all.txt")
 		debug("/Users/dave/src/gpt/input/Track Files/KMZ File (For Google Earth and Smartphones)/Waypoints/Important Infromation.kmz", "input-important.txt")
@@ -182,7 +184,9 @@ func (d *Data) SaveKmlWaypoints(dpath string, stamp string) error {
 }
 
 func (d *Data) SaveKmlTracks(dpath string, stamp string) error {
-	fmt.Println("Saving kml tracks")
+	if LOG {
+		fmt.Println("Saving kml tracks")
+	}
 	//debug("/Users/dave/src/gpt/input/Track Files/KMZ File (For Google Earth and Smartphones)/Tracks/Regular Tracks.kmz", "input-regular.txt")
 	//debug("/Users/dave/src/gpt/input/Track Files/KMZ File (For Google Earth and Smartphones)/Tracks/Optional Tracks.kmz", "input-optional.txt")
 	//debug("/Users/dave/src/gpt/input/Track Files/KMZ File (For Google Earth and Smartphones)/Tracks/All Tracks.kmz", "input-all.txt")
@@ -280,7 +284,9 @@ func (d *Data) SaveKmlTracks(dpath string, stamp string) error {
 }
 
 func (d *Data) SaveGpx(dpath string, stamp string) error {
-	fmt.Println("Saving gpx files")
+	if LOG {
+		fmt.Println("Saving gpx files")
+	}
 	type matcher struct {
 		path     []string
 		match    func(*Segment) bool
@@ -808,7 +814,9 @@ func (d *Data) SaveGpx(dpath string, stamp string) error {
 }
 
 func (d *Data) SaveGaia(dpath string) error {
-	fmt.Println("Saving gaia files")
+	if LOG {
+		fmt.Println("Saving gaia files")
+	}
 	type clusterStruct struct {
 		name     string
 		from, to int
@@ -889,6 +897,7 @@ func (d *Data) SaveGaia(dpath string) error {
 					}
 
 					rte.Points = gpx.LinePoints(geo.MergeLines(lines))
+					rte.Desc += "\n" + section.Scraped
 					contents["routes"].Routes = append(contents["routes"].Routes, rte)
 				}
 

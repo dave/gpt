@@ -105,7 +105,9 @@ func (d *Data) BuildRoutes() error {
 func (d *Data) Normalise() error {
 
 	processRoute := func(r *Route) error {
-		fmt.Println("Normalising", r.Debug())
+		if LOG {
+			fmt.Println("Normalising", r.Debug())
+		}
 		if err := r.BuildNetworks(); err != nil {
 			return fmt.Errorf("building networks: %w", err)
 		}

@@ -14,7 +14,9 @@ import (
 
 var SrtmClient *geoelevations.Srtm
 
-const VERSION = "v0.0.12"
+const VERSION = "v0.0.13"
+const LOG = true
+
 const DELTA = 0.075 // see https://docs.google.com/spreadsheets/d/1q610i2TkfUTHWvtqVAJ0V8zFtzPMQKBXEm7jiPyuDCQ/edit
 
 func main() {
@@ -27,6 +29,7 @@ func Main() error {
 
 	input := flag.String("input", "./GPT Master.kmz", "input file")
 	ele := flag.Bool("ele", true, "lookup elevations")
+	scrape := flag.Bool("scrape", false, "scrape descriptions from wikiexplora (experimental)")
 	output := flag.String("output", "./output", "output dir")
 	stamp := flag.String("stamp", fmt.Sprintf("%04d%02d%02d", time.Now().Year(), time.Now().Month(), time.Now().Day()), "date stamp for output files")
 	version := flag.Bool("version", false, "show version")
@@ -55,6 +58,12 @@ func Main() error {
 
 	if err := data.Scan(inputRoot, *ele); err != nil {
 		return fmt.Errorf("scanning kml: %w", err)
+	}
+
+	if *scrape {
+		if err := data.Scrape(); err != nil {
+			return fmt.Errorf("scraping web: %w", err)
+		}
 	}
 
 	if err := data.BuildRoutes(); err != nil {

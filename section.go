@@ -15,6 +15,7 @@ type Section struct {
 	Hiking      *Bundle  // If this section has a regular route that does not include packrafting, it's here.
 	Packrafting *Bundle  // This is the regular route for this section with packrafting trails chosen when possible.
 	Waypoints   []Waypoint
+	Scraped     string
 }
 
 func (s Section) String() string {

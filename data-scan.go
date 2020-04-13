@@ -302,7 +302,9 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 						segment.Length = ls.Line().Length()
 
 						if elevation {
-							fmt.Printf("Getting elevations for %s\n", segment.String())
+							if LOG {
+								fmt.Printf("Getting elevations for %s\n", segment.String())
+							}
 							// lookup elevations
 							for i := range segment.Line {
 								elevation, err := SrtmClient.GetElevation(http.DefaultClient, segment.Line[i].Lat, segment.Line[i].Lon)
@@ -439,21 +441,29 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 			}
 			return nil
 		}
-		fmt.Println("Getting elevations for resupplies waypoints")
+		if LOG {
+			fmt.Println("Getting elevations for resupplies waypoints")
+		}
 		if err := waypointElevations(d.Resupplies); err != nil {
 			return err
 		}
-		fmt.Println("Getting elevations for important waypoints")
+		if LOG {
+			fmt.Println("Getting elevations for important waypoints")
+		}
 		if err := waypointElevations(d.Important); err != nil {
 			return err
 		}
 		for _, section := range d.Sections {
-			fmt.Printf("Getting elevations for GPT%s\n", section.String())
+			if LOG {
+				fmt.Printf("Getting elevations for GPT%s\n", section.String())
+			}
 			if err := waypointElevations(section.Waypoints); err != nil {
 				return err
 			}
 		}
-		fmt.Println("Getting elevations for section start/end waypoints")
+		if LOG {
+			fmt.Println("Getting elevations for section start/end waypoints")
+		}
 		for i, terminator := range d.Terminators {
 			elevation, err := SrtmClient.GetElevation(http.DefaultClient, terminator.Lat, terminator.Lon)
 			if err != nil {
