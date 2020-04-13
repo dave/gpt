@@ -99,17 +99,48 @@ func (d *Data) BuildRoutes() error {
 		buildBundle(section.Packrafting, true)
 	}
 
+	return nil
+}
+
+func (d *Data) Normalise() error {
+
+	processRoute := func(r *Route) error {
+		fmt.Println("Normalising", r.Debug())
+		if err := r.BuildNetworks(); err != nil {
+			return fmt.Errorf("building networks: %w", err)
+		}
+		for _, network := range r.Networks {
+			if err := network.Normalise(); err != nil {
+				return fmt.Errorf("normalising network: %w", err)
+			}
+		}
+		return nil
+	}
+
+	processBundle := func(b *Bundle) error {
+		for key, route := range b.Regular {
+			if err := processRoute(route); err != nil {
+				return fmt.Errorf("normalising regular %+v route: %w", key, err)
+			}
+		}
+		for key, route := range b.Options {
+			if err := processRoute(route); err != nil {
+				return fmt.Errorf("normalising optional %+v route: %w", key, err)
+			}
+		}
+		return nil
+	}
+
 	for _, key := range d.Keys {
 		section := d.Sections[key]
-		fmt.Println("Processing", section.String())
 		if section.Hiking != nil {
-			if err := section.Hiking.Post(); err != nil {
-				return fmt.Errorf("post build for GPT%v hiking bundle: %w", section.Key.Code(), err)
+			if err := processBundle(section.Hiking); err != nil {
+				return fmt.Errorf("normalising GPT%v hiking bundle: %w", section.Key.Code(), err)
 			}
 		}
 		if section.Packrafting != nil {
-			if err := section.Packrafting.Post(); err != nil {
-				return fmt.Errorf("post build for GPT%v packrafting bundle: %w", section.Key.Code(), err)
+			if err := processBundle(section.Packrafting); err != nil {
+				return fmt.Errorf("normalising GPT%v packrafting bundle: %w", section.Key.Code(), err)
 			}
 		}
 	}

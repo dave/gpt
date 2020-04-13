@@ -5,7 +5,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/dave/gpt/geo"
 	"github.com/dave/gpt/gpx"
@@ -13,6 +12,7 @@ import (
 )
 
 func (d *Data) SaveKmlWaypoints(dpath string, stamp string) error {
+	fmt.Println("Saving kml waypoints")
 	/*
 		debug("/Users/dave/src/gpt/input/Track Files/KMZ File (For Google Earth and Smartphones)/Waypoints/All Points.kmz", "input-all.txt")
 		debug("/Users/dave/src/gpt/input/Track Files/KMZ File (For Google Earth and Smartphones)/Waypoints/Important Infromation.kmz", "input-important.txt")
@@ -182,6 +182,7 @@ func (d *Data) SaveKmlWaypoints(dpath string, stamp string) error {
 }
 
 func (d *Data) SaveKmlTracks(dpath string, stamp string) error {
+	fmt.Println("Saving kml tracks")
 	//debug("/Users/dave/src/gpt/input/Track Files/KMZ File (For Google Earth and Smartphones)/Tracks/Regular Tracks.kmz", "input-regular.txt")
 	//debug("/Users/dave/src/gpt/input/Track Files/KMZ File (For Google Earth and Smartphones)/Tracks/Optional Tracks.kmz", "input-optional.txt")
 	//debug("/Users/dave/src/gpt/input/Track Files/KMZ File (For Google Earth and Smartphones)/Tracks/All Tracks.kmz", "input-all.txt")
@@ -279,6 +280,7 @@ func (d *Data) SaveKmlTracks(dpath string, stamp string) error {
 }
 
 func (d *Data) SaveGpx(dpath string, stamp string) error {
+	fmt.Println("Saving gpx files")
 	type matcher struct {
 		path     []string
 		match    func(*Segment) bool
@@ -722,30 +724,6 @@ func (d *Data) SaveGpx(dpath string, stamp string) error {
 
 	for _, m := range matchers {
 
-		/*
-			var existing int
-			test, err := gpx.Load(filepath.Join(append([]string{"/Users/dave/src/gpt/input/Track Files/GPX Files (For Smartphones and Basecamp)"}, m.path...)...))
-			if err == nil {
-				existing = len(test.Tracks)
-			}
-			if existing != len(m.segments) {
-				//	if m.path[len(m.path)-1] == "RH-FY-2.gpx" {
-				//		for _, track := range test.Tracks {
-				//			fmt.Println(track.Name)
-				//		}
-				//	}
-				//	for _, segment := range m.segments {
-				//		fmt.Println("-", segment.Raw)
-				//	}
-				switch m.path[len(m.path)-1] {
-				case "RR-FY-2.gpx", "RH-FY-2.gpx", "RR-LD-V.gpx", "RH-LD-V.gpx":
-					// special case because tracks in 24P are RH but should be RR, so renamed
-				default:
-					return fmt.Errorf("%s test %d, built %d", filepath.Join(m.path...), existing, len(m.segments))
-				}
-			}
-		*/
-
 		if len(m.segments) == 0 {
 			continue
 		}
@@ -830,6 +808,7 @@ func (d *Data) SaveGpx(dpath string, stamp string) error {
 }
 
 func (d *Data) SaveGaia(dpath string) error {
+	fmt.Println("Saving gaia files")
 	type clusterStruct struct {
 		name     string
 		from, to int
@@ -891,10 +870,9 @@ func (d *Data) SaveGaia(dpath string) error {
 					for _, segment := range network.Segments {
 						lines = append(lines, segment.Line)
 					}
-					straights := buildStraights(network.Segments)
 
 					var id int
-					for i, straight := range straights {
+					for i, straight := range network.Straights {
 						if i > 0 {
 							rte.Desc += "---\n"
 						}
@@ -935,9 +913,8 @@ func (d *Data) SaveGaia(dpath string) error {
 							trk.Name = fmt.Sprintf("GPT%v option %v%s", route.Section.Key.Code(), route.OptionalKey.Code(), networkString)
 						}
 
-						straights := buildStraights(network.Segments)
 						var id int
-						for i, straight := range straights {
+						for i, straight := range network.Straights {
 							if i > 0 {
 								trk.Desc += "---\n"
 							}
@@ -1040,94 +1017,6 @@ func (d *Data) SaveGaia(dpath string) error {
 		return fmt.Errorf("writing important gpx: %w", err)
 	}
 	return nil
-}
-
-func buildStraights(segments []*Segment) []*Straight {
-	var straights []*Straight
-	newFlush := func(segment *Segment) *Flush {
-		return &Flush{
-			From:         segment.From,
-			Length:       segment.Length,
-			Terrains:     segment.Terrains,
-			Verification: segment.Verification,
-			Directional:  segment.Directional,
-			Experimental: segment.Experimental,
-			Segments:     []*Segment{segment},
-		}
-	}
-	for i, segment := range segments {
-		if i > 0 {
-			prev := segments[i-1]
-			if !prev.EndPoint.Node.Contains(segment.StartPoint) {
-				// new straight
-				straights = append(straights, &Straight{
-					Flushes: []*Flush{newFlush(segment)},
-				})
-			} else if !prev.Similar(segment) {
-				// new flush
-				s := straights[len(straights)-1]
-				s.Flushes = append(s.Flushes, newFlush(segment))
-			}
-		} else {
-			straights = append(straights, &Straight{
-				Flushes: []*Flush{newFlush(segment)},
-			})
-		}
-		s := straights[len(straights)-1]
-		f := s.Flushes[len(s.Flushes)-1]
-		f.Length += segment.Length
-		f.Segments = append(f.Segments, segment)
-	}
-	return straights
-}
-
-type Straight struct {
-	Flushes []*Flush
-}
-
-type Flush struct {
-	From, Length float64
-	Terrains     []string
-	Verification string
-	Directional  string
-	Experimental bool
-	Segments     []*Segment
-}
-
-func (f Flush) Description(id int, waypoint bool) string {
-	var sb strings.Builder
-	if !waypoint {
-		sb.WriteString(fmt.Sprintf("#%d at %.1f km: ", id, f.From))
-	}
-	for i, terrain := range f.Terrains {
-		if i > 0 {
-			sb.WriteString(", ")
-		}
-		sb.WriteString(Terrain(terrain))
-	}
-	properties := f.Properties()
-	if len(properties) > 0 {
-		sb.WriteString(fmt.Sprintf(" (%s)", strings.Join(properties, ", ")))
-	}
-	sb.WriteString(fmt.Sprintf(" for %.1f km", f.Length))
-	if waypoint {
-		sb.WriteString(fmt.Sprintf(" #%d", id))
-	}
-	return sb.String()
-}
-
-func (f Flush) Properties() []string {
-	var properties []string
-	if f.Verification != "" {
-		properties = append(properties, f.Verification)
-	}
-	if f.Directional != "" {
-		properties = append(properties, f.Directional)
-	}
-	if f.Experimental {
-		properties = append(properties, "EXP")
-	}
-	return properties
 }
 
 const Nomenclature = `EXP: Exploration Route

@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"time"
@@ -13,7 +14,7 @@ import (
 
 var SrtmClient *geoelevations.Srtm
 
-const VERSION = "v0.0.10"
+const VERSION = "v0.0.11"
 const DELTA = 0.075 // see https://docs.google.com/spreadsheets/d/1q610i2TkfUTHWvtqVAJ0V8zFtzPMQKBXEm7jiPyuDCQ/edit
 
 func main() {
@@ -37,6 +38,7 @@ func Main() error {
 	}
 
 	if *ele {
+		log.SetOutput(ioutil.Discard)
 		var err error
 		SrtmClient, err = geoelevations.NewSrtm(http.DefaultClient)
 		if err != nil {
@@ -57,6 +59,10 @@ func Main() error {
 
 	if err := data.BuildRoutes(); err != nil {
 		return fmt.Errorf("building routes: %w", err)
+	}
+
+	if err := data.Normalise(); err != nil {
+		return fmt.Errorf("normalising: %w", err)
 	}
 
 	if err := data.SaveGaia(*output); err != nil {

@@ -230,18 +230,6 @@ func (r *Route) BuildNetworks() error {
 		}
 	}
 
-	if false {
-		fmt.Println()
-		fmt.Println("***", r.Debug())
-		for i, node := range nodes {
-			fmt.Printf("#%d\n", i)
-			for _, point := range node.Points {
-				fmt.Printf("* %s\n", point.Debug())
-			}
-			fmt.Println()
-		}
-	}
-
 	doneSegments := map[*Segment]bool{}
 	for len(r.Segments) > len(doneSegments) {
 		// find a segment that hasn't been used
@@ -277,20 +265,6 @@ func (r *Route) BuildNetworks() error {
 		}
 		find(segment)
 		r.Networks = append(r.Networks, network)
-	}
-
-	if false {
-		if len(r.Networks) > 1 {
-			fmt.Printf("%s %d segments %d networks\n", r.Debug(), len(r.Segments), len(r.Networks))
-		}
-
-		for i, network := range r.Networks {
-			fmt.Printf("#%d\n", i)
-			for _, segment := range network.Segments {
-				fmt.Printf("* %s\n", segment.String())
-			}
-			fmt.Println()
-		}
 	}
 
 	return nil

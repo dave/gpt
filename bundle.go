@@ -10,23 +10,6 @@ type Bundle struct {
 // Post build tasks - normalise, tweak elevations for water, calculate stats etc.
 func (b *Bundle) Post() error {
 
-	for _, route := range b.Regular {
-		if err := route.BuildNetworks(); err != nil {
-			return fmt.Errorf("building networks for regular route: %w", err)
-		}
-		for _, network := range route.Networks {
-			network.Normalise()
-		}
-	}
-	for key, route := range b.Options {
-		if err := route.BuildNetworks(); err != nil {
-			return fmt.Errorf("building networks for optional route %s: %w", key.Code(), err)
-		}
-		for _, network := range route.Networks {
-			network.Normalise()
-		}
-	}
-
 	/*
 		if err := b.Regular.Normalise(); err != nil {
 			return fmt.Errorf("normalising regular route: %w", err)

@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/dave/gpt/geo"
 )
@@ -10,10 +11,11 @@ import (
 // Network is a collection of Segments which adjoin at nodes. There is a node at the start and end of
 // each segment, and also at the mid point of each segment where another segment's end point adjoins.
 type Network struct {
-	Route    *Route
-	Nodes    []*Node
-	Segments []*Segment
-	Entry    *Segment
+	Route     *Route
+	Nodes     []*Node
+	Segments  []*Segment
+	Entry     *Segment
+	Straights []*Straight
 
 	// Short edges go from point to point, and can be shorter than a segment where the segment has mid points. len(ShortEdges) >= len(Segments).
 	ShortEdges map[*Node][]*Edge
@@ -26,6 +28,212 @@ type Network struct {
 	// we choose the nearest unused point as the new entry point and repeat until all edges are used. Long edge paths DO
 	// NOT traverse segments in reverse.
 	LongEdgePaths map[*Point]*Path
+}
+
+func (n *Network) Normalise() error {
+
+	//if n.Debug() != "GPT02 hiking - variant H #1" {
+	//	return
+	//}
+
+	if false {
+		if n.Debug() != "GPT07 hiking - option 2B (El Troncoso) #0" {
+			return nil
+		}
+	}
+
+	n.FindEntrySegment()
+
+	if len(n.Entry.StartPoint.Node.Points) > 1 && len(n.Entry.EndPoint.Node.Points) == 1 {
+		n.Entry.Reverse()
+	}
+
+	n.BuildEdges()
+
+	n.BuildShortEdgePaths()
+
+	n.ReverseSegments()
+
+	for _, segment := range n.Segments {
+		segment.From = n.ShortEdgePaths[segment.StartPoint].Length
+	}
+
+	n.BuildLongEdgePaths()
+
+	if err := n.Reorder(); err != nil {
+		return fmt.Errorf("reordering: %w", err)
+	}
+
+	n.BuildStraights()
+
+	n.LevelWater()
+
+	return nil
+}
+
+func (n *Network) BuildStraights() {
+	newFlush := func(segment *Segment) *Flush {
+		return &Flush{
+			From:         segment.From,
+			Terrains:     segment.Terrains,
+			Verification: segment.Verification,
+			Directional:  segment.Directional,
+			Experimental: segment.Experimental,
+		}
+	}
+	newStraight := func(segment *Segment) *Straight {
+		return &Straight{
+			Flushes: []*Flush{newFlush(segment)},
+		}
+	}
+	for i, segment := range n.Segments {
+		if i > 0 {
+			prev := n.Segments[i-1]
+			if !prev.EndPoint.Node.Contains(segment.StartPoint) {
+				// new straight
+				n.Straights = append(n.Straights, newStraight(segment))
+			} else if !prev.Similar(segment) {
+				// new flush
+				s := n.Straights[len(n.Straights)-1]
+				s.Flushes = append(s.Flushes, newFlush(segment))
+			}
+		} else {
+			n.Straights = append(n.Straights, newStraight(segment))
+		}
+		s := n.Straights[len(n.Straights)-1]
+		f := s.Flushes[len(s.Flushes)-1]
+		f.Length += segment.Length
+		f.Segments = append(f.Segments, segment)
+		s.Segments = append(s.Segments, segment)
+	}
+}
+
+func (n *Network) LevelWater() {
+	//FJ: Fjord Packrafting, LK: Lake Packrafting, RI: River Packrafting, FY: Ferry
+	water := map[string]bool{"FJ": true, "LK": true, "RI": true, "FY": true}
+	same := func(s1, s2 *Segment) bool {
+		if len(s2.Terrains) != 1 {
+			return false
+		}
+		if !water[s2.Terrains[0]] {
+			return false
+		}
+		return s1.Terrains[0] == s2.Terrains[0]
+	}
+	match := func(s *Segment) bool {
+		if len(s.Terrains) != 1 {
+			return false
+		}
+		return water[s.Terrains[0]]
+	}
+	var stretches [][]*Segment
+	for _, straight := range n.Straights {
+		var stretch []*Segment
+		for i, segment := range straight.Segments {
+			if i > 0 {
+				if !same(straight.Segments[i-1], segment) {
+					if len(stretch) > 0 {
+						stretches = append(stretches, stretch)
+					}
+					stretch = nil
+				}
+			}
+			if match(segment) {
+				stretch = append(stretch, segment)
+			}
+		}
+		if len(stretch) > 0 {
+			stretches = append(stretches, stretch)
+		}
+	}
+	for _, stretch := range stretches {
+		switch stretch[0].Terrains[0] {
+		case "FJ":
+			// all elevations should be zero
+			for _, segment := range stretch {
+				for i := range segment.Line {
+					segment.Line[i] = geo.Pos{
+						Lat: segment.Line[i].Lat,
+						Lon: segment.Line[i].Lon,
+						Ele: 0,
+					}
+				}
+			}
+		case "LK", "FY":
+			// find the lowest non negative elevation
+			var lowest float64
+			var found bool
+			for _, segment := range stretch {
+				for _, pos := range segment.Line {
+					if !found || pos.Ele < lowest {
+						lowest = pos.Ele
+						found = true
+					}
+				}
+			}
+			if lowest < 0 {
+				lowest = 0
+			}
+			for _, segment := range stretch {
+				for i := range segment.Line {
+					segment.Line[i] = geo.Pos{
+						Lat: segment.Line[i].Lat,
+						Lon: segment.Line[i].Lon,
+						Ele: lowest,
+					}
+				}
+			}
+		case "RI":
+			var lastPos geo.Pos
+			var foundPos bool
+			var uphillCount, downhillCount int
+			for _, segment := range stretch {
+				for _, pos := range segment.Line {
+					if foundPos {
+						if lastPos.Ele < pos.Ele {
+							uphillCount++
+						}
+						if lastPos.Ele > pos.Ele {
+							downhillCount++
+						}
+					}
+					lastPos = pos
+					foundPos = true
+				}
+			}
+			uphill := uphillCount > downhillCount
+			var lastEle float64
+			var foundEle bool
+			for _, segment := range stretch {
+				for i := range segment.Line {
+					if foundEle {
+						if uphill {
+							// elevations can only rise
+							if segment.Line[i].Ele < lastEle {
+								segment.Line[i] = geo.Pos{
+									Lat: segment.Line[i].Lat,
+									Lon: segment.Line[i].Lon,
+									Ele: lastEle,
+								}
+							}
+						} else {
+							// elevations can only fall
+							// elevations can only rise
+							if segment.Line[i].Ele > lastEle {
+								segment.Line[i] = geo.Pos{
+									Lat: segment.Line[i].Lat,
+									Lon: segment.Line[i].Lon,
+									Ele: lastEle,
+								}
+							}
+						}
+					}
+					lastEle = segment.Line[i].Ele
+					foundEle = true
+				}
+			}
+		}
+	}
 }
 
 func (n *Network) BuildEdges() {
@@ -156,7 +364,7 @@ func (n *Network) BuildLongEdgePaths() {
 
 var debugString string
 
-func (n *Network) Reorder() {
+func (n *Network) Reorder() error {
 
 	debugString += fmt.Sprintln("*** Network:", n.Debug())
 	debugString += fmt.Sprintf("Entry: %s\n", n.Entry.String())
@@ -206,7 +414,7 @@ func (n *Network) Reorder() {
 		}
 	}
 	if longestPath == nil {
-		panic("couldn't find initial longest path!")
+		return fmt.Errorf("couldn't find initial longest path for %s", n.Debug())
 	}
 	for _, edge := range longestPath.Edges {
 		usedSegments[edge.Segment] = true
@@ -237,7 +445,7 @@ func (n *Network) Reorder() {
 				if n.Route.Regular {
 					// any segments after the main long route in regular routes are added to the
 					// optional routes.
-					panic(fmt.Sprintf("non-linear segments in %s", n.Debug()))
+					return fmt.Errorf("non-linear segments in %s", n.Debug())
 				} else {
 					orderedSegments = append(orderedSegments, edge.Segment)
 				}
@@ -249,7 +457,7 @@ func (n *Network) Reorder() {
 					if n.Route.Regular {
 						// any segments after the main long route in regular routes are added to the
 						// optional routes.
-						panic(fmt.Sprintf("non-linear segments in %s", n.Debug()))
+						return fmt.Errorf("non-linear segments in %s", n.Debug())
 					} else {
 						orderedSegments = append(orderedSegments, segment)
 					}
@@ -270,6 +478,7 @@ func (n *Network) Reorder() {
 	for i := range orderedSegments {
 		n.Segments[i] = orderedSegments[i]
 	}
+	return nil
 }
 
 func findNextUnusedStretch(used map[*Segment]bool, path *Path, fromIndex int) (edges []*Edge, length float64) {
@@ -283,46 +492,13 @@ func findNextUnusedStretch(used map[*Segment]bool, path *Path, fromIndex int) (e
 	return edges, length
 }
 
-func (n *Network) Normalise() {
-
-	//if n.Debug() != "GPT02 hiking - variant H #1" {
-	//	return
-	//}
-
-	if false {
-		if n.Debug() != "GPT07 hiking - option 2B (El Troncoso) #0" {
-			return
-		}
-	}
-
-	n.FindEntrySegment()
-
-	if len(n.Entry.StartPoint.Node.Points) > 1 && len(n.Entry.EndPoint.Node.Points) == 1 {
-		n.Entry.Reverse()
-	}
-
-	n.BuildEdges()
-
-	n.BuildShortEdgePaths()
-
-	n.ReverseSegments()
-
-	for _, segment := range n.Segments {
-		segment.From = n.ShortEdgePaths[segment.StartPoint].Length
-	}
-
-	n.BuildLongEdgePaths()
-
-	n.Reorder()
-}
-
 func (n *Network) FindEntrySegment() {
 	var force string
 	switch {
-	case n.Route.Regular && n.Route.Section.Key.Code() == "25H" && n.Route.Hiking:
-		force = "RR-MR-V@25H-0.0+0.7"
-	case n.Route.Regular && n.Route.Section.Key.Code() == "25H" && n.Route.Packrafting:
-		force = "RP-LK-2@25H-0.0+3.2 (Lago Kruger)"
+	//case n.Route.Regular && n.Route.Section.Key.Code() == "25H" && n.Route.Hiking:
+	//	force = "RR-MR-V@25H-0.0+0.7"
+	//case n.Route.Regular && n.Route.Section.Key.Code() == "25H" && n.Route.Packrafting:
+	//	force = "RP-LK-2@25H-0.0+3.2 (Lago Kruger)"
 	case n.Route.Regular && n.Route.Section.Key.Code() == "91P":
 		force = "RP-RI-1@91P- (Rio Exploradores)"
 	}
@@ -335,10 +511,33 @@ func (n *Network) FindEntrySegment() {
 		}
 		panic(fmt.Sprintf("can't find forced entry segment %s", force))
 	}
+
 	var lower func(s1, s2 *Segment) bool
 	if n.Route.Regular || n.Route.OptionalKey.Alternatives {
 		// regular route or hiking alternatives: find lowest From
-		lower = func(s1, s2 *Segment) bool { return s1.From < s2.From }
+		lower = func(s1, s2 *Segment) bool {
+			if s1.From == 0.0 && s2.From == 0.0 {
+				// If we have multiple segments with zero from, the segment code may tell us which should be the entry
+				// segment. RP => first for packrafting.
+				var values map[string]int
+				if n.Route.Packrafting {
+					values = map[string]int{
+						"RP": 1,
+						"RR": 2,
+						"RH": 3,
+					}
+				} else {
+					values = map[string]int{
+						"RH": 1,
+						"RR": 2,
+						"RP": 3,
+					}
+				}
+				// return true if s1 is the entry segment, false for s2
+				return values[s1.Code] < values[s2.Code]
+			}
+			return s1.From < s2.From
+		}
 	} else {
 		// optional routes: find lowest Count
 		lower = func(s1, s2 *Segment) bool { return s1.Count < s2.Count }
@@ -426,7 +625,7 @@ func (e Edge) Opposite(n *Node) *Node {
 	} else if e.Nodes[1] == n {
 		return e.Nodes[0]
 	}
-	panic("should check of edge has node before getting opposite")
+	panic("should check edge has node before getting opposite")
 }
 
 // Node is a collection of Points in the same approximate location.
@@ -481,4 +680,54 @@ func (p Point) Debug() string {
 	} else {
 		return fmt.Sprintf("%s #%d", p.Segment.Raw, p.Index)
 	}
+}
+
+type Straight struct {
+	Flushes  []*Flush
+	Segments []*Segment
+}
+
+type Flush struct {
+	From, Length float64
+	Terrains     []string
+	Verification string
+	Directional  string
+	Experimental bool
+	Segments     []*Segment
+}
+
+func (f Flush) Description(id int, waypoint bool) string {
+	var sb strings.Builder
+	if !waypoint {
+		sb.WriteString(fmt.Sprintf("#%d at %.1f km: ", id, f.From))
+	}
+	for i, terrain := range f.Terrains {
+		if i > 0 {
+			sb.WriteString(", ")
+		}
+		sb.WriteString(Terrain(terrain))
+	}
+	properties := f.Properties()
+	if len(properties) > 0 {
+		sb.WriteString(fmt.Sprintf(" (%s)", strings.Join(properties, ", ")))
+	}
+	sb.WriteString(fmt.Sprintf(" for %.1f km", f.Length))
+	if waypoint {
+		sb.WriteString(fmt.Sprintf(" #%d", id))
+	}
+	return sb.String()
+}
+
+func (f Flush) Properties() []string {
+	var properties []string
+	if f.Verification != "" {
+		properties = append(properties, f.Verification)
+	}
+	if f.Directional != "" {
+		properties = append(properties, f.Directional)
+	}
+	if f.Experimental {
+		properties = append(properties, "EXP")
+	}
+	return properties
 }
