@@ -14,10 +14,12 @@ import (
 
 var SrtmClient *geoelevations.Srtm
 
-const VERSION = "v0.0.14"
-const LOG = true
-
+const VERSION = "v0.0.16"
 const DELTA = 0.075 // see https://docs.google.com/spreadsheets/d/1q610i2TkfUTHWvtqVAJ0V8zFtzPMQKBXEm7jiPyuDCQ/edit
+
+var LOG bool
+var HAS_SINGLE bool
+var SINGLE SectionKey
 
 func main() {
 	if err := Main(); err != nil {
@@ -28,6 +30,8 @@ func main() {
 func Main() error {
 
 	input := flag.String("input", "./GPT Master.kmz", "input file")
+	logger := flag.Bool("log", true, "output logs")
+	single := flag.String("single", "", "only process a single section (for testing)")
 	ele := flag.Bool("ele", true, "lookup elevations")
 	scrape := flag.Bool("scrape", false, "scrape descriptions from wikiexplora (experimental)")
 	normalise := flag.Bool("normalise", true, "normalise routes")
@@ -35,6 +39,17 @@ func Main() error {
 	stamp := flag.String("stamp", fmt.Sprintf("%04d%02d%02d", time.Now().Year(), time.Now().Month(), time.Now().Day()), "date stamp for output files")
 	version := flag.Bool("version", false, "show version")
 	flag.Parse()
+
+	LOG = *logger
+
+	if *single != "" {
+		key, err := NewSectionKey(*single)
+		if err != nil {
+			return fmt.Errorf("parsing single flag: %w", err)
+		}
+		HAS_SINGLE = true
+		SINGLE = key
+	}
 
 	if *version {
 		fmt.Println(VERSION)

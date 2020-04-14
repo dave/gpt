@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
+	"golang.org/x/net/html"
 )
 
 func (d *Data) Scrape() error {
@@ -28,6 +29,9 @@ func (d *Data) Scrape() error {
 		urls[key] = fmt.Sprintf("http://www.wikiexplora.com/%s", name)
 	}
 	for _, key := range d.Keys {
+		if HAS_SINGLE && key != SINGLE {
+			continue
+		}
 		section := d.Sections[key]
 		if err := section.Scrape(cachedir, urls[key]); err != nil {
 			return fmt.Errorf("scraping GPT%s: %w", section.Key.Code(), err)
@@ -37,6 +41,10 @@ func (d *Data) Scrape() error {
 }
 
 func (s *Section) Scrape(cachedir, url string) error {
+	//if s.Key.Code() != "06" {
+	//	return nil
+	//}
+	var description string
 	var reader io.Reader
 	cachefpath := filepath.Join(cachedir, fmt.Sprintf("GPT%s.txt", s.Key.Code()))
 	f, err := os.Open(cachefpath)
@@ -73,22 +81,82 @@ func (s *Section) Scrape(cachedir, url string) error {
 	if err != nil {
 		return fmt.Errorf("reading %s: %w", url, err)
 	}
+	ignored := map[*html.Node]bool{}
 	dom.Find(".mw-headline").Each(func(i int, selection *goquery.Selection) {
 
+		c := selection
+		for c != nil && len(c.Nodes) > 0 {
+			if ignored[c.Nodes[0]] {
+				return
+			}
+			c = c.Parent()
+		}
+
+		var ignoreSection bool
+		switch strings.TrimSpace(selection.Text()) {
+		case "Recent Alerts and Suggestions", "Season Section Log", "Elevation Profile", "Satellite Image Map", "Summary Table", "Alerts and Logs of Past Seasons", "Older information for review", "Image Gallery":
+			var ignoredCount int
+			switch selection.Parent().Nodes[0].Data {
+			case "h2":
+				//ignoring an h2? skip all nodes until we find an h2
+				next := selection.Parent().Next()
+				for next != nil && len(next.Nodes) > 0 && next.Nodes[0].Data != "h2" {
+					ignored[next.Nodes[0]] = true
+					next = next.Next()
+					ignoredCount++
+				}
+			case "h3", "h4":
+				next := selection.Parent().Next()
+				for next != nil && len(next.Nodes) > 0 && next.Nodes[0].Data != "h2" && next.Nodes[0].Data != "h3" && next.Nodes[0].Data != "h4" {
+					ignored[next.Nodes[0]] = true
+					next = next.Next()
+					ignoredCount++
+				}
+			}
+			if ignoredCount > 0 {
+				description += "⦿ " + strings.TrimSpace(selection.Text()) + "\n\n"
+				description += "☞ Section removed - see web page.\n\n"
+			}
+			return
+		}
+
+		var section []*goquery.Selection
 		next := selection.Parent().Next()
-		if next != nil && len(next.Nodes) > 0 && next.Nodes[0].Data == "p" {
+		for next != nil && len(next.Nodes) > 0 && next.Nodes[0].Data != "h2" && next.Nodes[0].Data != "h3" && next.Nodes[0].Data != "h4" {
 			switch {
-			case strings.TrimSpace(selection.Text()) == "Elevation Profile":
 			case strings.TrimSpace(next.Text()) == "To be issued.":
+			case strings.TrimSpace(next.Text()) == "Not applicable.":
 				// nothing
 			default:
-				s.Scraped += selection.Text() + "\n"
-				s.Scraped += next.Text() + "\n"
+				section = append(section, next)
 			}
+			next = next.Next()
+		}
 
+		if ignoreSection {
+			return
+		} else if len(section) > 0 {
+			//fmt.Printf("GPT%s %s:", s.Key.Code(), selection.Text())
+			description += "⦿ " + strings.TrimSpace(selection.Text()) + "\n\n"
+			for _, part := range section {
+				//fmt.Print(" ", part.Nodes[0].Data)
+				if part.Nodes[0].Data == "table" {
+					description += "☞ Table removed - see web page.\n\n"
+				} else if len(strings.TrimSpace(part.Text())) > 0 {
+					description += strings.TrimSpace(part.Text()) + "\n\n"
+				}
+			}
+			//fmt.Println()
 		}
 		//fmt.Printf("%d, text: %s, %s\n", i, s.Text(), s.Parent().Next().Nodes[0].Data)
 	})
+
+	if len(description) == 0 {
+		s.Scraped += fmt.Sprintf("⦿ Full information\n\nUp to date information can be found at:\n\n%s\n\n", url)
+	} else {
+		s.Scraped += fmt.Sprintf("⦿ Full information\n\nThe following information may be incomplete and out of date. Be sure to check the up to date source:\n\n%s\n\n", url)
+	}
+	s.Scraped += description
 
 	//fmt.Println(string(b))
 	return nil

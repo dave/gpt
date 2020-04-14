@@ -18,6 +18,9 @@ type Data struct {
 func (d *Data) BuildRoutes() error {
 	// Build routes
 	for _, key := range d.Keys {
+		if HAS_SINGLE && key != SINGLE {
+			continue
+		}
 		section := d.Sections[key]
 		buildBundle := func(bundle *Bundle, packrafting bool) {
 			hiking := !packrafting
@@ -134,6 +137,9 @@ func (d *Data) Normalise(normalise bool) error {
 	}
 
 	for _, key := range d.Keys {
+		if HAS_SINGLE && key != SINGLE {
+			continue
+		}
 		section := d.Sections[key]
 		if section.Hiking != nil {
 			if err := processBundle(section.Hiking); err != nil {

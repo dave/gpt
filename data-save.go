@@ -72,6 +72,9 @@ func (d *Data) SaveKmlWaypoints(dpath string, stamp string) error {
 		Open: 1,
 	}
 	for _, key := range d.Keys {
+		if HAS_SINGLE && key != SINGLE {
+			continue
+		}
 		section := d.Sections[key]
 		if len(section.Waypoints) == 0 {
 			continue
@@ -193,6 +196,9 @@ func (d *Data) SaveKmlTracks(dpath string, stamp string) error {
 	do := func(name string, filter func(Track) bool) (*kml.Folder, error) {
 		f := &kml.Folder{Name: name, Open: 1}
 		for _, key := range d.Keys {
+			if HAS_SINGLE && key != SINGLE {
+				continue
+			}
 			section := d.Sections[key]
 			sectionFolder := &kml.Folder{
 				Name: section.String(),
@@ -749,6 +755,9 @@ func (d *Data) SaveGpx(dpath string, stamp string) error {
 
 	wpAll := gpx.Root{}
 	for _, key := range d.Keys {
+		if HAS_SINGLE && key != SINGLE {
+			continue
+		}
 		section := d.Sections[key]
 		for _, w := range section.Waypoints {
 			wpAll.Waypoints = append(wpAll.Waypoints, gpx.Waypoint{
@@ -843,6 +852,9 @@ func (d *Data) SaveGaia(dpath string) error {
 		}
 
 		for _, key := range d.Keys {
+			if HAS_SINGLE && key != SINGLE {
+				continue
+			}
 			section := d.Sections[key]
 			if section.Key.Number < cluster.from || section.Key.Number > cluster.to {
 				continue
@@ -873,6 +885,7 @@ func (d *Data) SaveGaia(dpath string) error {
 						direction = " southbound"
 					}
 					rte.Name = fmt.Sprintf("GPT%v %s%s", section.Key.Code(), section.Name, direction)
+					rte.Desc = "⦿ " + rte.Name + "\n\n"
 
 					var lines []geo.Line
 					for _, segment := range network.Segments {
@@ -921,6 +934,7 @@ func (d *Data) SaveGaia(dpath string) error {
 						} else {
 							trk.Name = fmt.Sprintf("GPT%v option %v%s", route.Section.Key.Code(), route.OptionalKey.Code(), networkString)
 						}
+						trk.Desc = "⦿ " + trk.Name + "\n\n"
 
 						var id int
 						for i, straight := range network.Straights {

@@ -455,7 +455,7 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 		}
 		for _, section := range d.Sections {
 			if LOG {
-				fmt.Printf("Getting elevations for GPT%s\n", section.String())
+				fmt.Printf("Getting elevations for GPT%s\n", section.Key.Code())
 			}
 			if err := waypointElevations(section.Waypoints); err != nil {
 				return err
