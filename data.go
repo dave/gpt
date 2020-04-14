@@ -102,7 +102,7 @@ func (d *Data) BuildRoutes() error {
 	return nil
 }
 
-func (d *Data) Normalise() error {
+func (d *Data) Normalise(normalise bool) error {
 
 	processRoute := func(r *Route) error {
 		if LOG {
@@ -112,7 +112,7 @@ func (d *Data) Normalise() error {
 			return fmt.Errorf("building networks: %w", err)
 		}
 		for _, network := range r.Networks {
-			if err := network.Normalise(); err != nil {
+			if err := network.Normalise(normalise); err != nil {
 				return fmt.Errorf("normalising network: %w", err)
 			}
 		}

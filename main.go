@@ -30,6 +30,7 @@ func Main() error {
 	input := flag.String("input", "./GPT Master.kmz", "input file")
 	ele := flag.Bool("ele", true, "lookup elevations")
 	scrape := flag.Bool("scrape", false, "scrape descriptions from wikiexplora (experimental)")
+	normalise := flag.Bool("normalise", true, "normalise routes")
 	output := flag.String("output", "./output", "output dir")
 	stamp := flag.String("stamp", fmt.Sprintf("%04d%02d%02d", time.Now().Year(), time.Now().Month(), time.Now().Day()), "date stamp for output files")
 	version := flag.Bool("version", false, "show version")
@@ -70,7 +71,7 @@ func Main() error {
 		return fmt.Errorf("building routes: %w", err)
 	}
 
-	if err := data.Normalise(); err != nil {
+	if err := data.Normalise(*normalise); err != nil {
 		return fmt.Errorf("normalising: %w", err)
 	}
 

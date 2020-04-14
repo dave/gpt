@@ -30,16 +30,12 @@ type Network struct {
 	LongEdgePaths map[*Point]*Path
 }
 
-func (n *Network) Normalise() error {
+func (n *Network) Normalise(normalise bool) error {
 
-	//if n.Debug() != "GPT02 hiking - variant H #1" {
-	//	return
-	//}
-
-	if false {
-		if n.Debug() != "GPT07 hiking - option 2B (El Troncoso) #0" {
-			return nil
-		}
+	if !normalise {
+		// if normalise has been disabled with a flag (for testing) we still need to run BuildStraights
+		n.BuildStraights()
+		return nil
 	}
 
 	n.FindEntrySegment()

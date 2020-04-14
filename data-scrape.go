@@ -1,14 +1,24 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"net/http"
+	"os"
+	"path"
+	"path/filepath"
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
 )
 
 func (d *Data) Scrape() error {
+
+	cachedir := path.Join(os.Getenv("HOME"), ".gpt-cache")
+	_ = os.MkdirAll(cachedir, 0777)
+
 	urls := map[SectionKey]string{}
 	for _, name := range pageUrls {
 		key, err := NewSectionKey(strings.Split(name, "_")[0])
@@ -19,39 +29,68 @@ func (d *Data) Scrape() error {
 	}
 	for _, key := range d.Keys {
 		section := d.Sections[key]
-
-		if LOG {
-			fmt.Printf("Scraping %q for description\n", urls[key])
+		if err := section.Scrape(cachedir, urls[key]); err != nil {
+			return fmt.Errorf("scraping GPT%s: %w", section.Key.Code(), err)
 		}
-
-		resp, err := http.Get(urls[key])
-		if err != nil {
-			return fmt.Errorf("getting %q: %w", urls[key], err)
-		}
-
-		dom, err := goquery.NewDocumentFromReader(resp.Body)
-		if err != nil {
-			return fmt.Errorf("reading %s: %w", urls[key], err)
-		}
-		dom.Find(".mw-headline").Each(func(i int, s *goquery.Selection) {
-
-			next := s.Parent().Next()
-			if next != nil && len(next.Nodes) > 0 && next.Nodes[0].Data == "p" {
-				switch {
-				case strings.TrimSpace(s.Text()) == "Elevation Profile":
-				case strings.TrimSpace(next.Text()) == "To be issued.":
-					// nothing
-				default:
-					section.Scraped += s.Text() + "\n"
-					section.Scraped += next.Text() + "\n"
-				}
-
-			}
-			//fmt.Printf("%d, text: %s, %s\n", i, s.Text(), s.Parent().Next().Nodes[0].Data)
-		})
-
-		//fmt.Println(string(b))
 	}
+	return nil
+}
+
+func (s *Section) Scrape(cachedir, url string) error {
+	var reader io.Reader
+	cachefpath := filepath.Join(cachedir, fmt.Sprintf("GPT%s.txt", s.Key.Code()))
+	f, err := os.Open(cachefpath)
+	if err == nil {
+		if LOG {
+			fmt.Printf("Web scrape data for GPT%s found in cache file %q\n", s.Key.Code(), cachefpath)
+		}
+		reader = f
+		defer f.Close()
+	} else {
+		if !os.IsNotExist(err) {
+			return fmt.Errorf("opening file: %w", err)
+		} else {
+			if LOG {
+				fmt.Printf("Scraping %q for description\n", url)
+			}
+			// file not found
+			resp, err := http.Get(url)
+			if err != nil {
+				return fmt.Errorf("getting %q: %w", url, err)
+			}
+			b, err := ioutil.ReadAll(resp.Body)
+			if err != nil {
+				return fmt.Errorf("reading %q: %w", url, err)
+			}
+			if err := ioutil.WriteFile(cachefpath, b, 0666); err != nil {
+				return fmt.Errorf("writing %s: %w", cachefpath, err)
+			}
+			reader = bytes.NewBuffer(b)
+		}
+	}
+
+	dom, err := goquery.NewDocumentFromReader(reader)
+	if err != nil {
+		return fmt.Errorf("reading %s: %w", url, err)
+	}
+	dom.Find(".mw-headline").Each(func(i int, selection *goquery.Selection) {
+
+		next := selection.Parent().Next()
+		if next != nil && len(next.Nodes) > 0 && next.Nodes[0].Data == "p" {
+			switch {
+			case strings.TrimSpace(selection.Text()) == "Elevation Profile":
+			case strings.TrimSpace(next.Text()) == "To be issued.":
+				// nothing
+			default:
+				s.Scraped += selection.Text() + "\n"
+				s.Scraped += next.Text() + "\n"
+			}
+
+		}
+		//fmt.Printf("%d, text: %s, %s\n", i, s.Text(), s.Parent().Next().Nodes[0].Data)
+	})
+
+	//fmt.Println(string(b))
 	return nil
 }
 
