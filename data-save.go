@@ -1155,6 +1155,7 @@ func (d *Data) SaveGaia(dpath string) error {
 		}
 		return sp.Save(filepath.Join(dpath, "start-points.kmz"))
 	}
+	return nil
 }
 
 const Nomenclature = `EXP: Exploration Route
