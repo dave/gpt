@@ -41,9 +41,6 @@ func (d *Data) Scrape() error {
 }
 
 func (s *Section) Scrape(cachedir, url string) error {
-	//if s.Key.Code() != "06" {
-	//	return nil
-	//}
 	var description string
 	var reader io.Reader
 	cachefpath := filepath.Join(cachedir, fmt.Sprintf("GPT%s.txt", s.Key.Code()))
@@ -89,8 +86,8 @@ func (s *Section) Scrape(cachedir, url string) error {
 		}
 
 		var ignoreSection bool
-		switch strings.TrimSpace(selection.Text()) {
-		case "Recent Alerts and Suggestions", "Season Section Log", "Elevation Profile", "Satellite Image Map", "Summary Table", "Alerts and Logs of Past Seasons", "Older information for review", "Image Gallery":
+		switch strings.TrimSpace(getText(selection)) {
+		case "Elevation Profile", "Satellite Image Map", "Summary Table", "Alerts and Logs of Past Seasons", "Older information for review", "Image Gallery":
 			var ignoredCount int
 			switch selection.Parent().Nodes[0].Data {
 			case "h2":
@@ -110,18 +107,25 @@ func (s *Section) Scrape(cachedir, url string) error {
 				}
 			}
 			if ignoredCount > 0 {
-				description += "⦿ " + strings.TrimSpace(selection.Text()) + "\n\n"
+				description += "⦿ " + strings.TrimSpace(getText(selection)) + "\n\n"
 				description += "☞ Section removed - see web page.\n\n"
 			}
 			return
+			//case "Optional Routes":
+			//	next := selection.Parent().Next()
+			//	for next != nil && len(next.Nodes) > 0 && next.Nodes[0].Data != "h2" {
+			//		fmt.Printf("GPT%s: %s %s\n", s.Key.Code(), next.Nodes[0].Data, getText(next))
+			//		fmt.Println()
+			//		next = next.Next()
+			//	}
 		}
 
 		var section []*goquery.Selection
 		next := selection.Parent().Next()
 		for next != nil && len(next.Nodes) > 0 && next.Nodes[0].Data != "h2" && next.Nodes[0].Data != "h3" && next.Nodes[0].Data != "h4" {
 			switch {
-			case strings.TrimSpace(next.Text()) == "To be issued.":
-			case strings.TrimSpace(next.Text()) == "Not applicable.":
+			case strings.TrimSpace(getText(next)) == "To be issued.":
+			case strings.TrimSpace(getText(next)) == "Not applicable.":
 				// nothing
 			default:
 				section = append(section, next)
@@ -132,12 +136,12 @@ func (s *Section) Scrape(cachedir, url string) error {
 		if ignoreSection {
 			return
 		} else if len(section) > 0 {
-			description += "⦿ " + strings.TrimSpace(selection.Text()) + "\n\n"
+			description += "⦿ " + strings.TrimSpace(getText(selection)) + "\n\n"
 			for _, part := range section {
 				if part.Nodes[0].Data == "table" {
 					description += "☞ Table removed - see web page.\n\n"
-				} else if len(strings.TrimSpace(part.Text())) > 0 {
-					description += strings.TrimSpace(part.Text()) + "\n\n"
+				} else if str := strings.TrimSpace(getText(part)); len(str) > 0 {
+					description += str + "\n\n"
 				}
 			}
 		}
@@ -151,6 +155,42 @@ func (s *Section) Scrape(cachedir, url string) error {
 	s.Scraped += description
 
 	return nil
+}
+
+func getText(s *goquery.Selection) string {
+	var buf bytes.Buffer
+
+	// Slightly optimized vs calling Each: no single selection object created
+	var f func(*html.Node)
+	f = func(n *html.Node) {
+		if n.Type == html.TextNode {
+			// Keep newlines and spaces, like jQuery
+			buf.WriteString(n.Data)
+		}
+		if n.FirstChild != nil {
+			for c := n.FirstChild; c != nil; c = c.NextSibling {
+				f(c)
+			}
+		}
+		if n.Data == "a" {
+			// find href
+			var href string
+			for _, attribute := range n.Attr {
+				if attribute.Key == "href" {
+					href = attribute.Val
+					break
+				}
+			}
+			if href != "" {
+				buf.WriteString(fmt.Sprintf(" [%s]", href))
+			}
+		}
+	}
+	for _, n := range s.Nodes {
+		f(n)
+	}
+
+	return buf.String()
 }
 
 var pageUrls = []string{
