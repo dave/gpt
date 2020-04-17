@@ -131,6 +131,93 @@ func (s Segment) String() string {
 	return b.String()
 }
 
+var weights = map[string]float64{
+	"thick": 3,
+	"thin":  1,
+}
+
+var colours = map[string]string{
+	"bright-orange": "e3aa71",
+	"orange":        "ff8000",
+	"bright-violet": "e371e3",
+	"violet":        "ff00ff",
+	"rose":          "df9f9f",
+	"red":           "ff0000",
+	"green":         "00ffb1",
+	"blue":          "0000ff",
+	"white":         "ffffff",
+}
+
+func (s Segment) Style() string {
+	// Terrain: BB: Bush Bashing, CC: Cross Country, MR: Minor Road, PR: Primary or Paved Road, TL: Horse or Hiking Trail, FJ: Fjord Packrafting, LK: Lake Packrafting, RI: River Packrafting, FY: Ferry
+	// Code: RR: Regular Route, RH: Regular Hiking Route, RP: Regular Packrafting Route, OH: Optional Hiking Route, OP: Optional Packrafting Route
+	// Verification: V: Verified Route, A: Approximate Route, I: Investigation Route
+
+	// https://colordesigner.io/color-mixer
+
+	/*
+	   1. Hiking Land Route (BB, CC, TL, MR, PR): Red
+	   2. Investigation (I) Hiking Land Route (BB, CC, TL, MR, PR): Rose (Red + White)
+	   3. Packrafting Only Land Route (BB, CC, TL, MR, PR): Violett (Red + Blue)
+	   4. Investigation (I) Packrafting Only Land Route (BB, CC, TL, MR, PR): Bright Violett (Red + Blue + White)
+	   5. Packrafting Water Route (FJ, LK, RI): Blue
+	   6. Ferry Route (FY): White
+	   7. Exploration Land Route (Regardless if Hiking or Packrafting Only): Orange (Red + Yellow)
+	   8. Investigation Exploration Land Route (Regardless if Hiking or Packrafting Only): Bright Orange (Red + Yellow + White)
+	   9. Exploration Packrafting Water Route: Green (Blue + Yellow)
+	*/
+
+	var color, weight string
+	switch s.Terrains[0] {
+	case "BB", "CC", "TL", "MR", "PR": // Land terrain
+		switch s.Experimental {
+		case true:
+			switch s.Verification {
+			case "I": // Investigation
+				color = "bright-orange" // red + yellow + white - #e3aa71
+			default:
+				color = "orange" // red + yellow - #ff8000
+			}
+		case false:
+			switch s.Code {
+			case "RP", "OP": // Packrafting only segments
+				switch s.Verification {
+				case "I": // Investigation
+					color = "bright-violet" // red + blue + white - #e371e3
+				default:
+					color = "violet" // red + blue - #ff00ff
+				}
+			default: // Either hiking specific or dual use segments
+				switch s.Verification {
+				case "I": // Investigation
+					color = "rose" // red + white - #df9f9f
+				default:
+					color = "red" // red - #ff0000
+				}
+			}
+		}
+	case "FJ", "LK", "RI": // Water terrain
+		switch s.Experimental {
+		case true:
+			color = "green" // blue + yellow - #00ffb1
+		case false:
+			color = "blue" // blue - #0000ff
+		}
+	case "FY":
+		color = "white" // white - #ffffff
+	}
+
+	switch s.Track.Optional {
+	case true:
+		weight = "thin"
+	case false:
+		weight = "thick"
+	}
+
+	return fmt.Sprintf("%s-%s", weight, color)
+
+}
+
 // Index in the track folder
 func (s *Segment) Index() int {
 	for i, segment := range s.Track.Segments {

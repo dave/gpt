@@ -184,6 +184,21 @@ func (d *Data) SaveKmlWaypoints(dpath string, stamp string) error {
 	return nil
 }
 
+func addSegmentStyles(d *kml.Document) {
+	for weightName, weightValue := range weights {
+		for colourName, colourValue := range colours {
+			r, g, b := colourValue[0:2], colourValue[2:4], colourValue[4:6]
+			d.Styles = append(d.Styles, &kml.Style{
+				Id: fmt.Sprintf("%s-%s", weightName, colourName),
+				LineStyle: &kml.LineStyle{
+					Color: fmt.Sprintf("ff%s%s%s", b, g, r),
+					Width: geo.FloatOne(weightValue),
+				},
+			})
+		}
+	}
+}
+
 func (d *Data) SaveKmlTracks(dpath string, stamp string) error {
 	logln("Saving kml tracks")
 	//debug("/Users/dave/src/gpt/input/Track Files/KMZ File (For Google Earth and Smartphones)/Tracks/Regular Tracks.kmz", "input-regular.txt")
@@ -212,8 +227,9 @@ func (d *Data) SaveKmlTracks(dpath string, stamp string) error {
 				}
 				for _, segment := range track.Segments {
 					trackFolder.Placemarks = append(trackFolder.Placemarks, &kml.Placemark{
-						Name: segment.String(),
-						Open: 1,
+						Name:     segment.String(),
+						Open:     1,
+						StyleUrl: fmt.Sprintf("#%s", segment.Style()),
 						LineString: &kml.LineString{
 							Tessellate:  true,
 							Coordinates: kml.LineCoordinates(segment.Line),
@@ -252,6 +268,7 @@ func (d *Data) SaveKmlTracks(dpath string, stamp string) error {
 			},
 		},
 	}
+	addSegmentStyles(&all.Document)
 	if err := all.Save(filepath.Join(dpath, "KMZ File (For Google Earth and Smartphones)", "Tracks", "All Tracks.kmz")); err != nil {
 		return fmt.Errorf("saving All Tracks.kmz: %w", err)
 	}
@@ -263,6 +280,7 @@ func (d *Data) SaveKmlTracks(dpath string, stamp string) error {
 			Folders: []*kml.Folder{regularFolder},
 		},
 	}
+	addSegmentStyles(&regular.Document)
 	if err := regular.Save(filepath.Join(dpath, "KMZ File (For Google Earth and Smartphones)", "Tracks", "Regular Tracks.kmz")); err != nil {
 		return fmt.Errorf("saving Regular Tracks.kmz: %w", err)
 	}
@@ -274,6 +292,7 @@ func (d *Data) SaveKmlTracks(dpath string, stamp string) error {
 			Folders: []*kml.Folder{optionalFolder},
 		},
 	}
+	addSegmentStyles(&optional.Document)
 	if err := optional.Save(filepath.Join(dpath, "KMZ File (For Google Earth and Smartphones)", "Tracks", "Optional Tracks.kmz")); err != nil {
 		return fmt.Errorf("saving Optional Tracks.kmz: %w", err)
 	}
@@ -1032,107 +1051,110 @@ func (d *Data) SaveGaia(dpath string) error {
 		return fmt.Errorf("writing important gpx: %w", err)
 	}
 
-	spfr := &kml.Folder{
-		Name:       "Regular tracks",
-		Visibility: 1,
-		Open:       0,
-		Placemarks: nil,
-	}
-	spfo := &kml.Folder{
-		Name:       "Optional tracks",
-		Visibility: 1,
-		Open:       0,
-		Placemarks: nil,
-	}
-	sp := kml.Root{
-		Xmlns: "http://www.opengis.net/kml/2.2",
-		Document: kml.Document{
-			Name: "Route start points.kmz",
-			Folders: []*kml.Folder{
-				spfr,
-				spfo,
+	if DEBUG {
+
+		spfr := &kml.Folder{
+			Name:       "Regular tracks",
+			Visibility: 1,
+			Open:       0,
+			Placemarks: nil,
+		}
+		spfo := &kml.Folder{
+			Name:       "Optional tracks",
+			Visibility: 1,
+			Open:       0,
+			Placemarks: nil,
+		}
+		sp := kml.Root{
+			Xmlns: "http://www.opengis.net/kml/2.2",
+			Document: kml.Document{
+				Name: "Route start points.kmz",
+				Folders: []*kml.Folder{
+					spfr,
+					spfo,
+				},
 			},
-		},
-	}
-	processRoute := func(pr, hr *Route) error {
-
-		var r *Route
-		if pr != nil {
-			r = pr
-		} else {
-			r = hr
 		}
-		rf := &kml.Folder{Name: r.String()}
+		processRoute := func(pr, hr *Route) error {
 
-		separateFolders := pr != nil && hr != nil && !pr.HasIdenticalNetworks(hr)
-		combineRoutes := pr != nil && hr != nil && pr.HasIdenticalNetworks(hr)
-
-		addContents := func(f *kml.Folder, r *Route, suffix string) {
-			for _, n := range r.Networks {
-
-				name := n.String()
-				if suffix != "" {
-					name += " " + suffix
-				}
-				f.Placemarks = append(f.Placemarks, &kml.Placemark{
-					Name:       name,
-					Visibility: 0,
-					Open:       0,
-					Point:      kml.PosPoint(n.Entry.Line.Start()),
-				})
-
-				net := &kml.Placemark{
-					Name:          n.String(),
-					Visibility:    0,
-					Open:          0,
-					MultiGeometry: &kml.MultiGeometry{},
-					Style: &kml.Style{LineStyle: kml.LineStyle{
-						Color: "ffffffff",
-						Width: 10,
-					}},
-				}
-				for _, segment := range n.Segments {
-					net.MultiGeometry.LineStrings = append(net.MultiGeometry.LineStrings, &kml.LineString{
-						Tessellate:  true,
-						Coordinates: kml.LineCoordinates(segment.Line),
-					})
-				}
-				f.Placemarks = append(f.Placemarks, net)
-			}
-		}
-
-		if separateFolders {
-			pf := &kml.Folder{Name: "packrafting"}
-			hf := &kml.Folder{Name: "hiking"}
-			addContents(pf, pr, "packrafting")
-			addContents(hf, hr, "hiking")
-			rf.Folders = append(rf.Folders, pf)
-			rf.Folders = append(rf.Folders, hf)
-		} else {
-			if combineRoutes {
-				// both routes have identical networks, so only need to do one of them. either will do.
-				addContents(rf, pr, "")
-			} else if pr != nil {
-				addContents(rf, pr, "")
-			} else if hr != nil {
-				addContents(rf, hr, "")
+			var r *Route
+			if pr != nil {
+				r = pr
 			} else {
-				panic("shouldn't be here")
+				r = hr
 			}
-		}
+			rf := &kml.Folder{Name: r.String()}
 
-		if r.Regular {
-			spfr.Folders = append(spfr.Folders, rf)
-		} else {
-			spfo.Folders = append(spfo.Folders, rf)
-		}
+			separateFolders := pr != nil && hr != nil && !pr.HasIdenticalNetworks(hr)
+			combineRoutes := pr != nil && hr != nil && pr.HasIdenticalNetworks(hr)
 
-		return nil
+			addContents := func(f *kml.Folder, r *Route, suffix string) {
+				for _, n := range r.Networks {
+
+					name := n.String()
+					if suffix != "" {
+						name += " " + suffix
+					}
+					f.Placemarks = append(f.Placemarks, &kml.Placemark{
+						Name:       name,
+						Visibility: 0,
+						Open:       0,
+						Point:      kml.PosPoint(n.Entry.Line.Start()),
+					})
+
+					net := &kml.Placemark{
+						Name:          n.String(),
+						Visibility:    0,
+						Open:          0,
+						MultiGeometry: &kml.MultiGeometry{},
+						Style: &kml.Style{LineStyle: &kml.LineStyle{
+							Color: "ffffffff",
+							Width: 10,
+						}},
+					}
+					for _, segment := range n.Segments {
+						net.MultiGeometry.LineStrings = append(net.MultiGeometry.LineStrings, &kml.LineString{
+							Tessellate:  true,
+							Coordinates: kml.LineCoordinates(segment.Line),
+						})
+					}
+					f.Placemarks = append(f.Placemarks, net)
+				}
+			}
+
+			if separateFolders {
+				pf := &kml.Folder{Name: "packrafting"}
+				hf := &kml.Folder{Name: "hiking"}
+				addContents(pf, pr, "packrafting")
+				addContents(hf, hr, "hiking")
+				rf.Folders = append(rf.Folders, pf)
+				rf.Folders = append(rf.Folders, hf)
+			} else {
+				if combineRoutes {
+					// both routes have identical networks, so only need to do one of them. either will do.
+					addContents(rf, pr, "")
+				} else if pr != nil {
+					addContents(rf, pr, "")
+				} else if hr != nil {
+					addContents(rf, hr, "")
+				} else {
+					panic("shouldn't be here")
+				}
+			}
+
+			if r.Regular {
+				spfr.Folders = append(spfr.Folders, rf)
+			} else {
+				spfo.Folders = append(spfo.Folders, rf)
+			}
+
+			return nil
+		}
+		if err := d.ForRoutePairs(processRoute); err != nil {
+			return err
+		}
+		return sp.Save(filepath.Join(dpath, "start-points.kmz"))
 	}
-	if err := d.ForRoutePairs(processRoute); err != nil {
-		return err
-	}
-	return sp.Save(filepath.Join(dpath, "start-points.kmz"))
 }
 
 const Nomenclature = `EXP: Exploration Route

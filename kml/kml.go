@@ -117,11 +117,11 @@ type Pair struct {
 }
 
 type Style struct {
-	Id         string     `xml:"id,attr,omitempty"`
-	LineStyle  LineStyle  `xml:"LineStyle,omitempty"`
-	IconStyle  IconStyle  `xml:"IconStyle,omitempty"`
-	LabelStyle LabelStyle `xml:"LabelStyle,omitempty"`
-	ListStyle  ListStyle  `xml:"ListStyle,omitempty"`
+	Id         string      `xml:"id,attr,omitempty"`
+	LineStyle  *LineStyle  `xml:"LineStyle,omitempty"`
+	IconStyle  *IconStyle  `xml:"IconStyle,omitempty"`
+	LabelStyle *LabelStyle `xml:"LabelStyle,omitempty"`
+	ListStyle  *ListStyle  `xml:"ListStyle,omitempty"`
 }
 
 type LineStyle struct {
@@ -130,10 +130,10 @@ type LineStyle struct {
 }
 
 type IconStyle struct {
-	Color   string  `xml:"color,omitempty"`
-	Scale   float64 `xml:"scale"`
-	Icon    Icon    `xml:"Icon,omitempty"`
-	HotSpot HotSpot `xml:"HotSpot,omitempty"`
+	Color   string   `xml:"color,omitempty"`
+	Scale   float64  `xml:"scale"`
+	Icon    *Icon    `xml:"Icon,omitempty"`
+	HotSpot *HotSpot `xml:"HotSpot,omitempty"`
 }
 
 type LabelStyle struct {
@@ -142,7 +142,7 @@ type LabelStyle struct {
 }
 
 type ListStyle struct {
-	ItemIcon Icon `xml:"ItemIcon,omitempty"`
+	ItemIcon *Icon `xml:"ItemIcon,omitempty"`
 }
 
 type Icon struct {
