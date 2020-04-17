@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/dave/gpt/kml"
@@ -14,16 +15,17 @@ import (
 
 var SrtmClient *geoelevations.Srtm
 
-const VERSION = "v0.0.16"
+const VERSION = "v0.0.17"
 const DELTA = 0.075 // see https://docs.google.com/spreadsheets/d/1q610i2TkfUTHWvtqVAJ0V8zFtzPMQKBXEm7jiPyuDCQ/edit
 
-var LOG bool
+var LOG, DEBUG bool
 var HAS_SINGLE bool
 var SINGLE SectionKey
 
 func main() {
 	if err := Main(); err != nil {
-		log.Fatalf("%v", err)
+		fmt.Printf("%v", err)
+		os.Exit(1)
 	}
 }
 
@@ -31,6 +33,7 @@ func Main() error {
 
 	input := flag.String("input", "./GPT Master.kmz", "input file")
 	logger := flag.Bool("log", true, "output logs")
+	debugger := flag.Bool("debug", true, "debug")
 	single := flag.String("single", "", "only process a single section (for testing)")
 	ele := flag.Bool("ele", true, "lookup elevations")
 	scrape := flag.Bool("scrape", false, "scrape descriptions from wikiexplora (experimental)")
@@ -41,6 +44,7 @@ func Main() error {
 	flag.Parse()
 
 	LOG = *logger
+	DEBUG = *debugger
 
 	if *single != "" {
 		key, err := NewSectionKey(*single)
@@ -106,4 +110,28 @@ func Main() error {
 		return fmt.Errorf("saving generic gps files: %w", err)
 	}
 	return nil
+}
+
+func logln(a ...interface{}) {
+	if LOG {
+		fmt.Println(a...)
+	}
+}
+
+func logf(format string, a ...interface{}) {
+	if LOG {
+		fmt.Printf(format, a...)
+	}
+}
+
+func debugln(a ...interface{}) {
+	if DEBUG {
+		fmt.Println(a...)
+	}
+}
+
+func debugf(format string, a ...interface{}) {
+	if DEBUG {
+		fmt.Printf(format, a...)
+	}
 }

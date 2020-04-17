@@ -12,6 +12,7 @@ import (
 type Segment struct {
 	*Track
 	Raw          string   // raw name of the placemark
+	Reversed     bool     // has the track been reversed? (to compare tracks by Raw)
 	Experimental bool     // segment name has "EXP-" prefix
 	Code         string   // track code from the segment name - RR: Regular Route, RH: Regular Hiking Route, RP: Regular Packrafting Route, OH: Optional Hiking Route, OP: Optional Packrafting Route
 	Terrains     []string // terrain codes from segment name - BB: Bush Bashing, CC: Cross Country, MR: Minor Road, PR: Primary or Paved Road, TL: Horse or Hiking Trail, FJ: Fjord Packrafting, LK: Lake Packrafting, RI: River Packrafting, FY: Ferry
@@ -69,6 +70,7 @@ func (s *Segment) DuplicateForTrack() *Segment {
 
 func (s *Segment) Reverse() {
 	debugString += fmt.Sprintf("Reversing %s\n", s.String())
+	s.Reversed = !s.Reversed
 	s.Line.Reverse()
 	s.StartPoint, s.EndPoint = s.EndPoint, s.StartPoint
 

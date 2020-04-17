@@ -65,11 +65,26 @@ type RegularKey struct {
 	Direction string // North = "N", South = "S", All = ""
 }
 
+func (k RegularKey) Debug() string {
+	switch k.Direction {
+	case "S":
+		return "southbound"
+	case "N":
+		return "northbound"
+	default:
+		return "regular"
+	}
+}
+
 type OptionalKey struct {
 	Option       int    // Option number. If true => Alternatives == false.
 	Variant      string // Variant code. If true => Alternatives == false.
 	Alternatives bool   // Hiking alternatives for packrafting routes. If true => Option == 0 && Variant == "".
 	Direction    string // Only for the hiking alternatives, may have a direction from the track - e.g. N = North, S = South, "" = All
+}
+
+func (k OptionalKey) Debug() string {
+	return "optional " + k.Code()
 }
 
 func (k OptionalKey) Code() string {

@@ -98,22 +98,62 @@ func (r Root) Save(fpath string) error {
 }
 
 type Document struct {
-	Name        string    `xml:"name"`
-	Description string    `xml:"description"`
-	Visibility  int       `xml:"visibility"`
-	Open        int       `xml:"open"`
-	Styles      []*Style  `xml:"Style"`
-	Folders     []*Folder `xml:"Folder"`
+	Name        string      `xml:"name,omitempty"`
+	Description string      `xml:"description,omitempty"`
+	Visibility  int         `xml:"visibility"`
+	Open        int         `xml:"open"`
+	Styles      []*Style    `xml:"Style"`
+	StyleMaps   []*StyleMap `xml:"StyleMap"`
+	Folders     []*Folder   `xml:"Folder"`
+}
+
+type StyleMap struct {
+	Pairs []*Pair `xml:"Pair"`
+}
+
+type Pair struct {
+	Key      string `xml:"key,omitempty"`
+	StyleUrl string `xml:"styleUrl,omitempty"`
 }
 
 type Style struct {
-	Id        string    `xml:"id,attr,omitempty"`
-	LineStyle LineStyle `xml:"LineStyle"`
+	Id         string     `xml:"id,attr,omitempty"`
+	LineStyle  LineStyle  `xml:"LineStyle,omitempty"`
+	IconStyle  IconStyle  `xml:"IconStyle,omitempty"`
+	LabelStyle LabelStyle `xml:"LabelStyle,omitempty"`
+	ListStyle  ListStyle  `xml:"ListStyle,omitempty"`
 }
 
 type LineStyle struct {
-	Color string  `xml:"color"`
-	Width float64 `xml:"width,omitempty"`
+	Color string       `xml:"color,omitempty"`
+	Width geo.FloatOne `xml:"width"`
+}
+
+type IconStyle struct {
+	Color   string  `xml:"color,omitempty"`
+	Scale   float64 `xml:"scale"`
+	Icon    Icon    `xml:"Icon,omitempty"`
+	HotSpot HotSpot `xml:"HotSpot,omitempty"`
+}
+
+type LabelStyle struct {
+	Color string       `xml:"color,omitempty"`
+	Scale geo.FloatOne `xml:"scale"`
+}
+
+type ListStyle struct {
+	ItemIcon Icon `xml:"ItemIcon,omitempty"`
+}
+
+type Icon struct {
+	Href string `xml:"href,omitempty"`
+}
+
+type HotSpot struct {
+	X      int    `xml:"x,attr"`
+	Y      int    `xml:"y,attr"`
+	Xunits string `xml:"xunits,attr,omitempty"` // "pixels"
+	Yunits string `xml:"yunits,attr,omitempty"` // "pixels"
 }
 
 type Folder struct {
@@ -158,7 +198,7 @@ type LineString struct {
 }
 
 type MultiGeometry struct {
-	LineString *LineString `xml:"LineString,omitempty"`
+	LineStrings []*LineString `xml:"LineString"`
 }
 
 func (l LineString) Line() geo.Line {

@@ -17,6 +17,53 @@ type Route struct {
 	Networks            []*Network
 }
 
+func (r *Route) HasIdenticalNetworks(r1 *Route) bool {
+	if len(r.Networks) != len(r1.Networks) {
+		return false
+	}
+	for i := range r.Networks {
+		if r.Networks[i].Signature() != r1.Networks[i].Signature() {
+			return false
+		}
+	}
+	return true
+}
+
+// String: a-GPTbbc-defggh-i/j
+// a: P, H: packrafting / hiking specific route
+// bb: 2 digit section number
+// c?: P, H: packrafting / hiking specific section
+// d: R, O: regular / optional
+// e?: N, S: northbound / southbound route
+// f?: A: hiking alternatives route
+// gg?: option number (2 digits)
+// h?: variant letter
+// i?: network number
+// j?: total number of networks
+func (r *Route) String() string {
+	var key string
+	if !r.Regular {
+		var alternatives string
+		if r.OptionalKey.Alternatives {
+			alternatives = "HA"
+		}
+		var option string
+		if r.OptionalKey.Option > 0 {
+			option = fmt.Sprintf("%02d", r.OptionalKey.Option)
+		}
+		key = fmt.Sprintf("-%s%s%s%s", alternatives, r.OptionalKey.Direction, option, r.OptionalKey.Variant)
+	} else {
+		if r.RegularKey.Direction != "" {
+			key = r.RegularKey.Direction
+		}
+	}
+	return fmt.Sprintf(
+		"GPT%s%s",
+		r.Section.Key.Code(),
+		key,
+	)
+}
+
 func (r *Route) Debug() string {
 
 	var dir string
@@ -51,29 +98,39 @@ func (r *Route) Debug() string {
 
 func (r *Route) BuildNetworks() error {
 
-	//if r.Debug() != "GPT92P packrafting - variant A" {
+	//if !(r.String() == "GPT02-H" && r.Hiking) {
 	//	return nil
 	//}
 
 	all := map[*Point]bool{}
+	var allOrdered []*Point
 	var ends []*Point
 	for _, segment := range r.Segments {
 
 		start := &Point{Segment: segment, Start: true, Index: 0, Pos: segment.Line[0]}
 		ends = append(ends, start)
-		all[start] = true
+		if !all[start] {
+			all[start] = true
+			allOrdered = append(allOrdered, start)
+		}
 		segment.StartPoint = start
 
 		finish := &Point{Segment: segment, End: true, Index: len(segment.Line) - 1, Pos: segment.Line[len(segment.Line)-1]}
 		ends = append(ends, finish)
-		all[finish] = true
+		if !all[finish] {
+			all[finish] = true
+			allOrdered = append(allOrdered, finish)
+		}
 		segment.EndPoint = finish
 
 	}
 	nearby := map[*Point][]*Point{}
 
 	for _, end := range ends {
-		all[end] = true
+		if !all[end] {
+			all[end] = true
+			allOrdered = append(allOrdered, end)
+		}
 		for _, neighbour := range ends {
 			if end == neighbour {
 				continue
@@ -104,7 +161,10 @@ func (r *Route) BuildNetworks() error {
 			mid := &Point{Segment: segment, Index: index, Pos: segment.Line[index]}
 			nearby[end] = append(nearby[end], mid)
 			nearby[mid] = append(nearby[mid], end)
-			all[mid] = true
+			if !all[mid] {
+				all[mid] = true
+				allOrdered = append(allOrdered, mid)
+			}
 			segment.MidPoints = append(segment.MidPoints, mid)
 		}
 	}
@@ -127,7 +187,7 @@ func (r *Route) BuildNetworks() error {
 				addPointAndAllNearby(point)
 			}
 		}
-		for point := range all {
+		for _, point := range allOrdered {
 			// find any unused point and add it to the node
 			if !done[point] {
 				addPointAndAllNearby(point)
@@ -163,7 +223,6 @@ func (r *Route) BuildNetworks() error {
 		}
 
 		needToSeparate := func(node *Node) (bool, [][]*Point) {
-
 			for _, rule := range separationRules {
 				var separatedPointGroups [][]*Point
 				for _, separationGroup := range rule {
@@ -184,10 +243,15 @@ func (r *Route) BuildNetworks() error {
 
 			// if node has more than 1 point from the same segment, split and assign the other points based on distance
 			segments := map[*Segment][]*Point{}
+			var segmentsOrdered []*Segment
 			for _, point := range node.Points {
+				if segments[point.Segment] == nil {
+					segmentsOrdered = append(segmentsOrdered, point.Segment)
+				}
 				segments[point.Segment] = append(segments[point.Segment], point)
 			}
-			for _, points := range segments {
+			for _, segment := range segmentsOrdered {
+				points := segments[segment]
 				if len(points) > 1 {
 					var separatedPointGroups [][]*Point
 					for _, p := range points {
@@ -241,8 +305,15 @@ func (r *Route) BuildNetworks() error {
 		addOrSplit(node)
 	}
 
-	for _, node := range nodes {
-		//fmt.Printf("%d) %s\n", i, node.Debug())
+	const PRINT_NODES = false
+
+	if PRINT_NODES {
+		debugf("\n\n%s\n", r.String())
+	}
+	for i, node := range nodes {
+		if PRINT_NODES {
+			debugf("%d) %s\n", i, node.Debug())
+		}
 		for _, point := range node.Points {
 			point.Node = node
 		}

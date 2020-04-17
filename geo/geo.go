@@ -1,8 +1,27 @@
 package geo
 
 import (
+	"fmt"
 	"math"
 )
+
+type FloatFive float64
+
+func (d FloatFive) MarshalText() ([]byte, error) {
+	return []byte(fmt.Sprintf("%.5f", d)), nil
+}
+
+type FloatZero float64
+
+func (m FloatZero) MarshalText() ([]byte, error) {
+	return []byte(fmt.Sprintf("%.0f", m)), nil
+}
+
+type FloatOne float64
+
+func (m FloatOne) MarshalText() ([]byte, error) {
+	return []byte(fmt.Sprintf("%.1f", m)), nil
+}
 
 type Line []Pos
 

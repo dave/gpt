@@ -30,6 +30,23 @@ type Network struct {
 	LongEdgePaths map[*Point]*Path
 }
 
+func (n *Network) Signature() string {
+	var parts []string
+	for _, segment := range n.Segments {
+		parts = append(parts, segment.Raw)
+		parts = append(parts, fmt.Sprint(segment.Reversed))
+		parts = append(parts, fmt.Sprint(segment == n.Entry))
+	}
+	return strings.Join(parts, ",")
+}
+
+func (n *Network) String() string {
+	if len(n.Route.Networks) > 1 {
+		return fmt.Sprintf("%s-%d/%d", n.Route.String(), n.Index()+1, len(n.Route.Networks))
+	}
+	return n.Route.String()
+}
+
 func (n *Network) Normalise(normalise bool) error {
 
 	if !normalise {
@@ -548,7 +565,7 @@ func (n *Network) FindEntrySegment() {
 }
 
 func (n *Network) Debug() string {
-	return fmt.Sprintf("%s #%d", n.Route.Debug(), n.Index())
+	return fmt.Sprintf("%s #%d", n.Route.Debug(), n.Index()+1)
 }
 
 func (n *Network) Index() int {

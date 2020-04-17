@@ -49,18 +49,14 @@ func (s *Section) Scrape(cachedir, url string) error {
 	cachefpath := filepath.Join(cachedir, fmt.Sprintf("GPT%s.txt", s.Key.Code()))
 	f, err := os.Open(cachefpath)
 	if err == nil {
-		if LOG {
-			fmt.Printf("Web scrape data for GPT%s found in cache file %q\n", s.Key.Code(), cachefpath)
-		}
+		logf("Web scrape data for GPT%s found in cache file %q\n", s.Key.Code(), cachefpath)
 		reader = f
 		defer f.Close()
 	} else {
 		if !os.IsNotExist(err) {
 			return fmt.Errorf("opening file: %w", err)
 		} else {
-			if LOG {
-				fmt.Printf("Scraping %q for description\n", url)
-			}
+			logf("Scraping %q for description\n", url)
 			// file not found
 			resp, err := http.Get(url)
 			if err != nil {
@@ -136,19 +132,15 @@ func (s *Section) Scrape(cachedir, url string) error {
 		if ignoreSection {
 			return
 		} else if len(section) > 0 {
-			//fmt.Printf("GPT%s %s:", s.Key.Code(), selection.Text())
 			description += "⦿ " + strings.TrimSpace(selection.Text()) + "\n\n"
 			for _, part := range section {
-				//fmt.Print(" ", part.Nodes[0].Data)
 				if part.Nodes[0].Data == "table" {
 					description += "☞ Table removed - see web page.\n\n"
 				} else if len(strings.TrimSpace(part.Text())) > 0 {
 					description += strings.TrimSpace(part.Text()) + "\n\n"
 				}
 			}
-			//fmt.Println()
 		}
-		//fmt.Printf("%d, text: %s, %s\n", i, s.Text(), s.Parent().Next().Nodes[0].Data)
 	})
 
 	if len(description) == 0 {
@@ -158,7 +150,6 @@ func (s *Section) Scrape(cachedir, url string) error {
 	}
 	s.Scraped += description
 
-	//fmt.Println(string(b))
 	return nil
 }
 

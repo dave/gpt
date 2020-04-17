@@ -181,10 +181,8 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 					}
 
 					if matches := placemarkName.FindStringSubmatch(segmentPlacemark.Name); len(matches) == 0 {
-						//fmt.Printf("case %q: placemark.Name = %q\n", placemark.Name, strings.ReplaceAll(placemark.Name, "#", "-#"))
 						return fmt.Errorf("no placemark regex match for %q in %q %q", segmentPlacemark.Name, section.String(), track.String())
 					} else {
-						//fmt.Printf("%v %#v\n", segmentPlacemark.Name, matches)
 						if matches[1] == "EXP-" {
 							segment.Experimental = true
 						}
@@ -240,7 +238,6 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 							return fmt.Errorf("decoding section number from %q: %w", segmentPlacemark.Name, err)
 						}
 						if key.Number != segment.Track.Section.Key.Number || key.Suffix != segment.Track.Section.Key.Suffix {
-							//fmt.Printf("segment %q has wrong section number in %q\n", segmentPlacemark.Name, segment.Track.Section.String())
 							return fmt.Errorf("segment %q has wrong section number in %q", segmentPlacemark.Name, segment.Track.Section.String())
 						}
 
@@ -252,7 +249,6 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 							}
 						}
 						if option != segment.Track.Option {
-							//fmt.Printf("incorrect option: %q is in %q\n", segment.Raw, segment.Track.Raw)
 							return fmt.Errorf("incorrect option %q is in %q", segment.Raw, segment.Track.Raw)
 						}
 
@@ -294,7 +290,7 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 
 						var ls kml.LineString
 						if segmentPlacemark.LineString == nil {
-							ls = *segmentPlacemark.MultiGeometry.LineString
+							ls = *segmentPlacemark.MultiGeometry.LineStrings[0]
 						} else {
 							ls = *segmentPlacemark.LineString
 						}
@@ -302,9 +298,7 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 						segment.Length = ls.Line().Length()
 
 						if elevation {
-							if LOG {
-								fmt.Printf("Getting elevations for %s\n", segment.String())
-							}
+							logf("Getting elevations for %s\n", segment.String())
 							// lookup elevations
 							for i := range segment.Line {
 								elevation, err := SrtmClient.GetElevation(http.DefaultClient, segment.Line[i].Lat, segment.Line[i].Lon)
@@ -441,29 +435,21 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 			}
 			return nil
 		}
-		if LOG {
-			fmt.Println("Getting elevations for resupplies waypoints")
-		}
+		logln("Getting elevations for resupplies waypoints")
 		if err := waypointElevations(d.Resupplies); err != nil {
 			return err
 		}
-		if LOG {
-			fmt.Println("Getting elevations for important waypoints")
-		}
+		logln("Getting elevations for important waypoints")
 		if err := waypointElevations(d.Important); err != nil {
 			return err
 		}
 		for _, section := range d.Sections {
-			if LOG {
-				fmt.Printf("Getting elevations for GPT%s\n", section.Key.Code())
-			}
+			logf("Getting elevations for GPT%s\n", section.Key.Code())
 			if err := waypointElevations(section.Waypoints); err != nil {
 				return err
 			}
 		}
-		if LOG {
-			fmt.Println("Getting elevations for section start/end waypoints")
-		}
+		logln("Getting elevations for section start/end waypoints")
 		for i, terminator := range d.Terminators {
 			elevation, err := SrtmClient.GetElevation(http.DefaultClient, terminator.Lat, terminator.Lon)
 			if err != nil {
