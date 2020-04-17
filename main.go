@@ -15,7 +15,7 @@ import (
 
 var SrtmClient *geoelevations.Srtm
 
-const VERSION = "v0.0.21"
+const VERSION = "v0.0.22"
 const DELTA = 0.075 // see https://docs.google.com/spreadsheets/d/1q610i2TkfUTHWvtqVAJ0V8zFtzPMQKBXEm7jiPyuDCQ/edit
 
 var LOG, DEBUG bool
@@ -36,7 +36,7 @@ func Main() error {
 	debugger := flag.Bool("debug", true, "debug")
 	single := flag.String("single", "", "only process a single section (for testing)")
 	ele := flag.Bool("ele", true, "lookup elevations")
-	scrape := flag.Bool("scrape", false, "scrape descriptions from wikiexplora (experimental)")
+	scrape := flag.Bool("scrape", true, "scrape descriptions from wikiexplora")
 	normalise := flag.Bool("normalise", true, "normalise routes")
 	output := flag.String("output", "./output", "output dir")
 	stamp := flag.String("stamp", fmt.Sprintf("%04d%02d%02d", time.Now().Year(), time.Now().Month(), time.Now().Day()), "date stamp for output files")

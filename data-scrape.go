@@ -15,35 +15,47 @@ import (
 	"golang.org/x/net/html"
 )
 
+const WARNING_SYMBOL = "☞"
+const HEADING_SYMBOL = "●" //"◉" //"✪" //"●" //"★" //"⦿"
+const WAYPOINT_SYMBOL = "☉"
+const ROUTE_SYMBOL = "⬲" //"⛢"
+
 func (d *Data) Scrape() error {
 
 	cachedir := path.Join(os.Getenv("HOME"), ".gpt-cache")
 	_ = os.MkdirAll(cachedir, 0777)
 
-	urls := map[SectionKey]string{}
-	for _, name := range pageUrls {
-		key, err := NewSectionKey(strings.Split(name, "_")[0])
-		if err != nil {
-			return fmt.Errorf("parsing section key from %s: %w", name, err)
-		}
-		urls[key] = fmt.Sprintf("http://www.wikiexplora.com/%s", name)
-	}
 	for _, key := range d.Keys {
 		if HAS_SINGLE && key != SINGLE {
 			continue
 		}
 		section := d.Sections[key]
-		if err := section.Scrape(cachedir, urls[key]); err != nil {
+		if err := section.Scrape(cachedir); err != nil {
 			return fmt.Errorf("scraping GPT%s: %w", section.Key.Code(), err)
 		}
 	}
 	return nil
 }
 
-func (s *Section) Scrape(cachedir, url string) error {
+func (s *Section) Scrape(cachedir string) error {
 	var description string
+	var summaryPackrafting, summaryHiking string
+	write := func(s string) {
+		description += s
+	}
+	writeS := func(s string) {
+		summaryPackrafting += s
+		summaryHiking += s
+	}
+	writeSP := func(s string) {
+		summaryPackrafting += s
+	}
+	writeSH := func(s string) {
+		summaryHiking += s
+	}
 	var reader io.Reader
-	cachefpath := filepath.Join(cachedir, fmt.Sprintf("GPT%s.txt", s.Key.Code()))
+	url := fmt.Sprintf("http://www.wikiexplora.com/GPT%s", s.Key.Code())
+	cachefpath := filepath.Join(cachedir, fmt.Sprintf("GPT%s.html", s.Key.Code()))
 	f, err := os.Open(cachefpath)
 	if err == nil {
 		logf("Web scrape data for GPT%s found in cache file %q\n", s.Key.Code(), cachefpath)
@@ -86,7 +98,9 @@ func (s *Section) Scrape(cachedir, url string) error {
 		}
 
 		var ignoreSection bool
-		switch strings.TrimSpace(getText(selection)) {
+		var summary []*html.Node
+		title := strings.TrimSpace(getText(selection))
+		switch title {
 		case "Elevation Profile", "Satellite Image Map", "Summary Table", "Alerts and Logs of Past Seasons", "Older information for review", "Image Gallery":
 			var ignoredCount int
 			switch selection.Parent().Nodes[0].Data {
@@ -94,21 +108,49 @@ func (s *Section) Scrape(cachedir, url string) error {
 				//ignoring an h2? skip all nodes until we find an h2
 				next := selection.Parent().Next()
 				for next != nil && len(next.Nodes) > 0 && next.Nodes[0].Data != "h2" {
+					if title == "Summary Table" {
+						// summary
+						summary = append(summary, next.Nodes[0])
+					}
 					ignored[next.Nodes[0]] = true
 					next = next.Next()
 					ignoredCount++
 				}
-			case "h3", "h4":
+			case "h3", "h4", "h5":
 				next := selection.Parent().Next()
-				for next != nil && len(next.Nodes) > 0 && next.Nodes[0].Data != "h2" && next.Nodes[0].Data != "h3" && next.Nodes[0].Data != "h4" {
+				for next != nil && len(next.Nodes) > 0 && next.Nodes[0].Data != "h2" && next.Nodes[0].Data != "h3" && next.Nodes[0].Data != "h4" && next.Nodes[0].Data != "h5" {
 					ignored[next.Nodes[0]] = true
 					next = next.Next()
 					ignoredCount++
 				}
 			}
-			if ignoredCount > 0 {
-				description += "⦿ " + strings.TrimSpace(getText(selection)) + "\n\n"
-				description += "☞ Section removed - see web page.\n\n"
+
+			if len(summary) == 0 {
+				if ignoredCount > 0 {
+					write(HEADING_SYMBOL + " " + strings.TrimSpace(getText(selection)) + "\n\n")
+					write(WARNING_SYMBOL + " Section removed - see web page.\n\n")
+				}
+			} else {
+				writeS(HEADING_SYMBOL + " " + strings.TrimSpace(getText(selection)) + "\n\n")
+				summary := goquery.Selection{Nodes: summary}
+				trs := summary.Find("tr")
+				trs.Each(func(i int, tr *goquery.Selection) {
+					tds := tr.Find("td")
+					firstColumn := strings.TrimSpace(tds.First().Text())
+					switch firstColumn {
+					case "Group", "Region", "Start", "Finish", "Status", "Traversable", "Packraft", "Connects to", "Options", "Comment", "Character", "Challenges":
+						// one column
+						writeS(firstColumn + ": " + strings.TrimSpace(getText(tds.First().Next())))
+						writeS("\n")
+					case "Attraction", "Difficulty", "Direction":
+						// two columns
+						writeSH(firstColumn + ": " + strings.TrimSpace(getText(tds.First().Next())))
+						writeSP(firstColumn + ": " + strings.TrimSpace(getText(tds.First().Next().Next())))
+						writeS("\n")
+					}
+				})
+				writeS("\n")
+
 			}
 			return
 			//case "Optional Routes":
@@ -122,7 +164,7 @@ func (s *Section) Scrape(cachedir, url string) error {
 
 		var section []*goquery.Selection
 		next := selection.Parent().Next()
-		for next != nil && len(next.Nodes) > 0 && next.Nodes[0].Data != "h2" && next.Nodes[0].Data != "h3" && next.Nodes[0].Data != "h4" {
+		for next != nil && len(next.Nodes) > 0 && next.Nodes[0].Data != "h2" && next.Nodes[0].Data != "h3" && next.Nodes[0].Data != "h4" && next.Nodes[0].Data != "h5" {
 			switch {
 			case strings.TrimSpace(getText(next)) == "To be issued.":
 			case strings.TrimSpace(getText(next)) == "Not applicable.":
@@ -136,25 +178,49 @@ func (s *Section) Scrape(cachedir, url string) error {
 		if ignoreSection {
 			return
 		} else if len(section) > 0 {
-			description += "⦿ " + strings.TrimSpace(getText(selection)) + "\n\n"
+			write(HEADING_SYMBOL + " " + strings.TrimSpace(getText(selection)) + "\n\n")
 			for _, part := range section {
 				if part.Nodes[0].Data == "table" {
-					description += "☞ Table removed - see web page.\n\n"
+					write(WARNING_SYMBOL + " Table removed - see web page.\n\n")
 				} else if str := strings.TrimSpace(getText(part)); len(str) > 0 {
-					description += str + "\n\n"
+					write(str + "\n\n")
 				}
 			}
 		}
 	})
 
-	if len(description) == 0 {
-		s.Scraped += fmt.Sprintf("⦿ Full information\n\nUp to date information can be found at:\n\n%s\n\n", url)
-	} else {
-		s.Scraped += fmt.Sprintf("⦿ Full information\n\nThe following information may be incomplete and out of date. Be sure to check the up to date source:\n\n%s\n\n", url)
-	}
-	s.Scraped += description
+	s.ScrapedHiking += fmt.Sprintf(HEADING_SYMBOL+" Full information\n\nThe following information may be incomplete and out of date. Be sure to check the up to date source:\n\n%s\n\n", url)
+	s.ScrapedHiking += summaryHiking
+	s.ScrapedHiking += description
+
+	s.ScrapedPackrafting += fmt.Sprintf(HEADING_SYMBOL+" Full information\n\nThe following information may be incomplete and out of date. Be sure to check the up to date source:\n\n%s\n\n", url)
+	s.ScrapedPackrafting += summaryPackrafting
+	s.ScrapedPackrafting += description
 
 	return nil
+}
+
+func getTextRaw(n *html.Node) string {
+	if n == nil {
+		return ""
+	}
+	var buf bytes.Buffer
+	// Slightly optimized vs calling Each: no single selection object created
+	var f func(*html.Node)
+	f = func(n *html.Node) {
+		if n.Type == html.TextNode {
+			// Keep newlines and spaces, like jQuery
+			buf.WriteString(n.Data)
+		}
+		if n.FirstChild != nil {
+			for c := n.FirstChild; c != nil; c = c.NextSibling {
+				f(c)
+			}
+		}
+	}
+	f(n)
+
+	return buf.String()
 }
 
 func getText(s *goquery.Selection) string {
@@ -173,15 +239,19 @@ func getText(s *goquery.Selection) string {
 			}
 		}
 		if n.Data == "a" {
+			text := strings.TrimSpace(getTextRaw(n))
 			// find href
 			var href string
 			for _, attribute := range n.Attr {
 				if attribute.Key == "href" {
-					href = attribute.Val
+					href = strings.TrimSpace(attribute.Val)
 					break
 				}
 			}
-			if href != "" {
+			if strings.HasPrefix(href, "/") {
+				href = "http://www.wikiexplora.com" + href
+			}
+			if href != "" && !strings.HasPrefix(href, "#") && href != text {
 				buf.WriteString(fmt.Sprintf(" [%s]", href))
 			}
 		}
@@ -189,77 +259,8 @@ func getText(s *goquery.Selection) string {
 	for _, n := range s.Nodes {
 		f(n)
 	}
-
-	return buf.String()
-}
-
-var pageUrls = []string{
-	"GPT01_-_Cerro_Purgatorio",
-	"GPT02_-_Mina_El_Teniente",
-	"GPT03_-_R%C3%ADos_Claros",
-	"GPT04_-_Alto_Huemul",
-	"GPT05_-_R%C3%ADo_Colorado",
-	"GPT06_-_Volc%C3%A1n_Descabezado",
-	"GPT07_-_Laguna_Dial",
-	"GPT08_-_Volc%C3%A1n_Chillan",
-	"GPT09_-_Volc%C3%A1n_Antuco",
-	"GPT10_-_Laguna_El_Barco",
-	"GPT11_-_Cerro_Moncol",
-	"GPT12_-_R%C3%ADo_Rahue",
-	"GPT13_-_Laguna_Icalma",
-	"GPT14_-_Volc%C3%A1n_Sollipulli",
-	"GPT15_-_Curarrehue",
-	"GPT16_-_Volc%C3%A1n_Quetrupillan",
-	"GPT17H_-_Liqui%C3%B1e",
-	"GPT17P_-_Neltume",
-	"GPT18_-_Lago_Pirihueico",
-	"GPT19_-_Volc%C3%A1n_Puyehue",
-	"GPT20_-_Volc%C3%A1n_Antillanca",
-	"GPT21_-_Lago_Todos_Los_Santos",
-	"GPT22_-_Cocham%C3%B3",
-	"GPT23_-_PN_Lago_Puelo",
-	"GPT24H_-_PN_Los_Alerces_Tierra",
-	"GPT24P_-_PN_Los_Alerces_Agua",
-	"GPT25H_-_Aldea_Escolar",
-	"GPT25P_-_Lago_Amutui_Quimei",
-	"GPT26_-_Carrenleuf%C3%BA",
-	"GPT27H_-_Lago_Palena",
-	"GPT27P_-_Alto_R%C3%ADo_Palena",
-	"GPT28H_-_La_Tapera",
-	"GPT28P_-_Bajo_R%C3%ADo_Palena",
-	"GPT29H_-_Rio_Cisnes",
-	"GPT29P_-_Valle_Picacho",
-	"GPT30H_-_Coyhaique",
-	"GPT30P_-_Canal_Puyuhuapi",
-	"GPT31H_-_Valle_Simpson",
-	"GPT31P_-_Lagos_de_Ays%C3%A9n",
-	"GPT32_-_Cerro_Castillo",
-	"GPT33H_-_Puerto_Iba%C3%B1ez",
-	"GPT33P_-_R%C3%ADo_Iba%C3%B1ez",
-	"GPT34H_-_Lago_General_Carrera",
-	"GPT34P_-_Lago_General_Carrera",
-	"GPT35_-_RN_Lago_Jeinimeni",
-	"GPT36H_-_Ruta_De_Los_Pioneros",
-	"GPT36P_-_R%C3%ADo_Baker",
-	"GPT37H_-_Lago_O%27Higgins",
-	"GPT37P_-_Pen%C3%ADnsula_La_Florida",
-	"GPT38_-_Glaciar_Chico",
-	"GPT39_-_Monte_Fitz_Roy",
-	"GPT40_-_Glaciar_Viedma",
-	"GPT70_-_Alto_R%C3%ADo_Futaleuf%C3%BA",
-	"GPT71_-_Espol%C3%B3n",
-	"GPT72_-_Bajo_R%C3%ADo_Futaleuf%C3%BA",
-	"GPT73P_-_Lago_Yelcho",
-	"GPT74P_-_R%C3%ADo_Yelcho",
-	"GPT75P_-_R%C3%ADo_Fr%C3%ADo",
-	"GPT76_-_PN_Pumalin_Sur",
-	"GPT77_-_PN_Pumalin_Norte",
-	"GPT78_-_Estuario_de_Reloncav%C3%AD",
-	"GPT80P_-_Valle_Exploradores",
-	"GPT81P_-_Traves%C3%ADa_Leones-Soler",
-	"GPT82P_-_Traves%C3%ADa_Soler-Nef",
-	"GPT83P_-_Traves%C3%ADa_Nef-Colonia",
-	"GPT90P_-_Volc%C3%A1n_Hudson",
-	"GPT91P_-_Istmo_de_Ofqui",
-	"GPT92P_-_Glacier_Steffens",
+	str := buf.String()
+	str = strings.ReplaceAll(str, "\uF0B1", WAYPOINT_SYMBOL)
+	str = strings.ReplaceAll(str, "\uF08F", ROUTE_SYMBOL)
+	return str
 }

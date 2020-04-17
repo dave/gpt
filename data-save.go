@@ -896,7 +896,7 @@ func (d *Data) SaveGaia(dpath string) error {
 						direction = " southbound"
 					}
 					rte.Name = fmt.Sprintf("GPT%v %s%s", section.Key.Code(), section.Name, direction)
-					rte.Desc = "⦿ " + rte.Name + "\n\n"
+					rte.Desc = HEADING_SYMBOL + " " + rte.Name + "\n\n"
 
 					var lines []geo.Line
 					for _, segment := range network.Segments {
@@ -921,7 +921,11 @@ func (d *Data) SaveGaia(dpath string) error {
 					}
 
 					rte.Points = gpx.LinePoints(geo.MergeLines(lines))
-					rte.Desc += "\n" + section.Scraped
+					if mode == "hiking" {
+						rte.Desc += "\n" + section.ScrapedHiking
+					} else {
+						rte.Desc += "\n" + section.ScrapedPackrafting
+					}
 					contents["routes"].Routes = append(contents["routes"].Routes, rte)
 				}
 
@@ -945,7 +949,7 @@ func (d *Data) SaveGaia(dpath string) error {
 						} else {
 							trk.Name = fmt.Sprintf("GPT%v option %v%s", route.Section.Key.Code(), route.OptionalKey.Code(), networkString)
 						}
-						trk.Desc = "⦿ " + trk.Name + "\n\n"
+						trk.Desc = HEADING_SYMBOL + " " + trk.Name + "\n\n"
 
 						var id int
 						for i, straight := range network.Straights {
@@ -1051,7 +1055,7 @@ func (d *Data) SaveGaia(dpath string) error {
 		return fmt.Errorf("writing important gpx: %w", err)
 	}
 
-	if DEBUG {
+	if false {
 
 		spfr := &kml.Folder{
 			Name:       "Regular tracks",
