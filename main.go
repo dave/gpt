@@ -15,7 +15,7 @@ import (
 
 var SrtmClient *geoelevations.Srtm
 
-const VERSION = "v0.0.22"
+const VERSION = "v0.0.24"
 const DELTA = 0.075 // see https://docs.google.com/spreadsheets/d/1q610i2TkfUTHWvtqVAJ0V8zFtzPMQKBXEm7jiPyuDCQ/edit
 
 var LOG, DEBUG bool
@@ -33,7 +33,7 @@ func Main() error {
 
 	input := flag.String("input", "./GPT Master.kmz", "input file")
 	logger := flag.Bool("log", true, "output logs")
-	debugger := flag.Bool("debug", true, "debug")
+	debugger := flag.Bool("debug", false, "debug")
 	single := flag.String("single", "", "only process a single section (for testing)")
 	ele := flag.Bool("ele", true, "lookup elevations")
 	scrape := flag.Bool("scrape", true, "scrape descriptions from wikiexplora")
@@ -133,5 +133,11 @@ func debugln(a ...interface{}) {
 func debugf(format string, a ...interface{}) {
 	if DEBUG {
 		fmt.Printf(format, a...)
+	}
+}
+
+func debugfln(format string, a ...interface{}) {
+	if DEBUG {
+		fmt.Printf(format+"\n", a...)
 	}
 }
