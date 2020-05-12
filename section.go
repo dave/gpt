@@ -19,6 +19,10 @@ type Section struct {
 	ScrapedHiking      string
 }
 
+func (s Section) FolderName() string {
+	return fmt.Sprintf("GPT%s (%s)", s.Key.Code(), s.Name)
+}
+
 func (s Section) String() string {
 	return fmt.Sprintf("GPT%s-%s", s.Key.Code(), s.Name)
 }
@@ -36,9 +40,6 @@ func NewSectionKey(code string) (SectionKey, error) {
 	var key SectionKey
 	code = strings.TrimSpace(code)
 	code = strings.TrimPrefix(code, "GPT")
-
-	// TODO: remove this (typeo "GPP36H/36P-G (Lago Ciervo)")
-	code = strings.TrimPrefix(code, "GPP")
 
 	if strings.HasSuffix(code, "P") {
 		key.Suffix = "P"

@@ -175,6 +175,7 @@ type Placemark struct {
 	LineString    *LineString    `xml:"LineString,omitempty"`
 	MultiGeometry *MultiGeometry `xml:"MultiGeometry,omitempty"`
 	Style         *Style         `xml:"Style"`
+	Legacy        string         `xml:"legacy,attr,omitempty"`
 }
 
 type Point struct {

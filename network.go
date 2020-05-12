@@ -40,6 +40,34 @@ func (n *Network) Signature() string {
 	return strings.Join(parts, ",")
 }
 
+func (n *Network) FolderName(networkId, networksLength int, withName bool) string {
+	var name string
+	if n.Route.OptionalKey.Option > 0 {
+		name = fmt.Sprintf("%02d%s", n.Route.OptionalKey.Option, n.Route.OptionalKey.Variant)
+	} else {
+		name = n.Route.OptionalKey.Variant
+	}
+	if networksLength > 1 {
+		name += string('a' + networkId)
+	}
+
+	//if len(n.Route.Networks) >= 10 {
+	//	name += fmt.Sprintf(" %02d/%02d", n.Index()+1, len(n.Route.Networks))
+	//} else if len(n.Route.Networks) > 1 {
+	//	name += fmt.Sprintf(" %d/%d", n.Index()+1, len(n.Route.Networks))
+	//}
+
+	if withName {
+		if n.Route.OptionalKey.Variant != "" && n.Segments[0].Name != "" {
+			name += fmt.Sprintf(" (%s)", n.Segments[0].Name)
+		} else if n.Route.OptionalKey.Variant == "" && n.Route.Name != "" {
+			name += fmt.Sprintf(" (%s)", n.Route.Name)
+		}
+	}
+
+	return name
+}
+
 func (n *Network) String() string {
 	if len(n.Route.Networks) > 1 {
 		return fmt.Sprintf("%s-%d/%d", n.Route.String(), n.Index()+1, len(n.Route.Networks))

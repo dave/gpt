@@ -39,7 +39,8 @@ func Main() error {
 	scrape := flag.Bool("scrape", true, "scrape descriptions from wikiexplora")
 	normalise := flag.Bool("normalise", true, "normalise routes")
 	output := flag.String("output", "./output", "output dir")
-	stamp := flag.String("stamp", fmt.Sprintf("%04d%02d%02d", time.Now().Year(), time.Now().Month(), time.Now().Day()), "date stamp for output files")
+	//stamp := flag.String("stamp", fmt.Sprintf("%04d%02d%02d", time.Now().Year(), time.Now().Month(), time.Now().Day()), "date stamp for output files")
+	_ = flag.String("stamp", fmt.Sprintf("%04d%02d%02d", time.Now().Year(), time.Now().Month(), time.Now().Day()), "date stamp for output files")
 	version := flag.Bool("version", false, "show version")
 	flag.Parse()
 
@@ -94,21 +95,27 @@ func Main() error {
 		return fmt.Errorf("normalising: %w", err)
 	}
 
-	if err := data.SaveGaia(*output); err != nil {
-		return fmt.Errorf("saving gaia files: %w", err)
+	if err := data.SaveMaster(*output); err != nil {
+		return fmt.Errorf("saving master file: %w", err)
 	}
 
-	if err := data.SaveGpx(*output, *stamp); err != nil {
-		return fmt.Errorf("saving generic gps files: %w", err)
-	}
+	/*
+		if err := data.SaveGaia(*output); err != nil {
+			return fmt.Errorf("saving gaia files: %w", err)
+		}
 
-	if err := data.SaveKmlTracks(*output, *stamp); err != nil {
-		return fmt.Errorf("saving generic gps files: %w", err)
-	}
+		if err := data.SaveGpx(*output, *stamp); err != nil {
+			return fmt.Errorf("saving generic gps files: %w", err)
+		}
 
-	if err := data.SaveKmlWaypoints(*output, *stamp); err != nil {
-		return fmt.Errorf("saving generic gps files: %w", err)
-	}
+		if err := data.SaveKmlTracks(*output, *stamp); err != nil {
+			return fmt.Errorf("saving generic gps files: %w", err)
+		}
+
+		if err := data.SaveKmlWaypoints(*output, *stamp); err != nil {
+			return fmt.Errorf("saving generic gps files: %w", err)
+		}
+	*/
 	return nil
 }
 

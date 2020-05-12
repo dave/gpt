@@ -106,79 +106,24 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 
 					switch segmentPlacemark.Name {
 
-					// double space
-					case "RP-FJ-2@29P(S)-107.7+5.3  (Fiordo Aysen)":
-						segmentPlacemark.Name = "RP-FJ-2@29P(S)-107.7+5.3 (Fiordo Aysen)"
-					case "OP-FJ-2@28P-01-#002  (Fiordo Pitipalena Brazo Pillan)":
-						segmentPlacemark.Name = "OP-FJ-2@28P-01-#002 (Fiordo Pitipalena Brazo Pillan)"
-					case "OP-RI-2@28P-04-#001  (Rio Melimoyu)":
-						segmentPlacemark.Name = "OP-RI-2@28P-04-#001 (Rio Melimoyu)"
-					case "OP-FJ-2@28P-05B-#002  (Estero del Medio)":
-						segmentPlacemark.Name = "OP-FJ-2@28P-05B-#002 (Estero del Medio)"
-					case "OP-FJ-2@90P-01-#001  (Fiordo Aysen)":
-						segmentPlacemark.Name = "OP-FJ-2@90P-01-#001 (Fiordo Aysen)"
+					// typeo in "EXP"
+					case "EXO-OP-LK-2@36P-04E-#001":
+						segmentPlacemark.Name = "EXP-OP-LK-2@36P-04E-#001"
 
-					// missing length
-					case "RP-LK-2@31P-180.8+ (Lago Riesco)":
-						segmentPlacemark.Name = "RP-LK-2@31P-180.8+0.0 (Lago Riesco)"
-
-					case "RP-LK-2@35-53.4+5.2\n (Lago Jeinemeni)":
-						segmentPlacemark.Name = "RP-LK-2@35-53.4+5.2 (Lago Jeinemeni)"
-
-					case "Untitled Path", "Untitled Path (Lago Zenteno)":
+					case "Untitled Path":
 						continue
 
-					case "OH-MR-V", "OH-PR-V", "OH-TL-V":
-						continue
-
-					case "OP-FJ-2@28P-06-#0010 (Canal Puyuhuapi)":
-						segmentPlacemark.Name = "OP-FJ-2@28P-06-#010 (Canal Puyuhuapi)"
-
-					case "OH-TL-V@33H-08-#005A":
-						segmentPlacemark.Name = "OH-TL-V@33H-08A-#005"
-
-					case "OP-MR-V @33H-11E-#001":
-						segmentPlacemark.Name = "OP-MR-V@33H-11E-#001"
-					case "OP-MR-V@35-02-$00":
-						segmentPlacemark.Name = "OP-MR-V@35-02-#002"
-
-					case "OP-TL&BB@36P-02-#009":
-						segmentPlacemark.Name = "OP-TL&BB-V@36P-02-#009"
-
-					case "RH-TL&CC-I@76-B-#001":
-						segmentPlacemark.Name = "OH-TL&CC-I@76-B-#001"
-
-					case "LK-2@91P-01-#007 (Lago Gualas)":
-						segmentPlacemark.Name = "OP-LK-2@91P-01-#007 (Lago Gualas)"
-
-						// wrong section codes
-					case "RP-RI-1@36H- (Rio Cisnes)":
-						segmentPlacemark.Name = "RP-RI-1@36P- (Rio Cisnes)" // has wrong section number in "GPT36P-Rio Baker"
-					case "RP-LK-2@36H- (Lago Ciervo)":
-						segmentPlacemark.Name = "RP-LK-2@36P- (Lago Ciervo)" // has wrong section number in "GPT36P-Rio Baker"
-					case "RP-RI-1@36H- (Rio Mayer)":
-						segmentPlacemark.Name = "RP-RI-1@36P- (Rio Mayer)" // has wrong section number in "GPT36P-Rio Baker"
 					case "OH-TL-V@34P-01A-#001":
-						segmentPlacemark.Name = "OH-TL-V@33H-06A-#001" // has wrong section number in "GPT33H-Torres de Avellano" AND OPTION NUMBER
+						segmentPlacemark.Name = "OH-TL-V@33H-06A-#001"
 					case "OH-TL-V@34P-01B-#001":
-						segmentPlacemark.Name = "OH-TL-V@33H-06B-#001" // has wrong section number in "GPT33H-Torres de Avellano" AND OPTION NUMBER
+						segmentPlacemark.Name = "OH-TL-V@33H-06B-#001"
 					case "OH-TL-V@34P-01C-#001":
-						segmentPlacemark.Name = "OH-TL-V@33H-06C-#001" // has wrong section number in "GPT33H-Torres de Avellano" AND OPTION NUMBER
+						segmentPlacemark.Name = "OH-TL-V@33H-06C-#001"
 					case "OH-TL-V@34P-01E-#001":
-						segmentPlacemark.Name = "OH-TL-V@33H-06E-#001" // has wrong section number in "GPT33H-Torres de Avellano" AND OPTION NUMBER
+						segmentPlacemark.Name = "OH-TL-V@33H-06E-#001"
 
-					// Broken options:
-					case "OH-MR-V@32-", "OH-MR-I@32-", "OH-CC-I@32-", "OH-TL-I@32-", "OH-TL-V@32-":
-						continue
-
-					case "OP-CC-A@36H-C-#002":
-						segmentPlacemark.Name = "OP-CC-A@36H-11C-#002" //"Option 11 Rio Salto (2018)"
-					case "OP-LK-2@36H-C-#003 (Laguna Esmeralda)":
-						segmentPlacemark.Name = "OP-LK-2@36H-11C-#003 (Laguna Esmeralda)" //"Option 11 Rio Salto (2018)"
-					case "OP-RI-1@36P-02-#001 (Rio Bravo)":
-						segmentPlacemark.Name = "OP-RI-1@36P-03-#001 (Rio Bravo)" //"Option 3 Rio Bravo (2019)"
-					case "OP-FJ-2@36P-02-#002 (Fiordo Mitchell)":
-						segmentPlacemark.Name = "OP-FJ-2@36P-03-#002 (Fiordo Mitchell)" //"Option 3 Rio Bravo (2019)"
+					case "OH-FY-2@22-05A-#002 (Translado Lago Vidal Gormaz)":
+						segmentPlacemark.Name = "OH-FY-2@22-05-#002 (Translado Lago Vidal Gormaz)"
 
 					}
 
@@ -242,6 +187,7 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 							return fmt.Errorf("decoding section number from %q: %w", segmentPlacemark.Name, err)
 						}
 						if key.Number != segment.Track.Section.Key.Number || key.Suffix != segment.Track.Section.Key.Suffix {
+							//debugfln("segment %q has wrong section number in %q", segmentPlacemark.Name, segment.Track.Section.String())
 							return fmt.Errorf("segment %q has wrong section number in %q", segmentPlacemark.Name, segment.Track.Section.String())
 						}
 
@@ -396,7 +342,7 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 					Name: p.Name,
 				})
 			}
-		case "Important Infromation", "Important Information":
+		case "Important Information":
 			for _, p := range folder.Placemarks {
 				d.Important = append(d.Important, Waypoint{
 					Pos:  p.Point.Pos(),
