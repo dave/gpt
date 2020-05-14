@@ -13,7 +13,7 @@ import (
 func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 
 	var tracksFolder, pointsFolder *kml.Folder
-	for _, folder := range inputRoot.Document.Folders[0].Folders {
+	for _, folder := range inputRoot.Document.Folders {
 		switch folder.Name {
 		case "Tracks":
 			tracksFolder = folder
@@ -263,17 +263,6 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 				}
 			}
 		}
-	}
-
-	// TODO: remove this
-	// Waypoints are incorrectly tagged as GPT70P / GPT71P / GPT72P - the track is GPT70 / GPT71 / GPT72
-	removeSuffix := map[int]bool{
-		70: true,
-		71: true,
-		72: true,
-		76: true,
-		77: true,
-		78: true,
 	}
 
 	for _, folder := range pointsFolder.Folders {
