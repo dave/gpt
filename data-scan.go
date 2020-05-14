@@ -286,9 +286,6 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 							if err != nil {
 								return fmt.Errorf("parsing section key %q from %q: %w", s, p.Name, err)
 							}
-							if removeSuffix[key.Number] {
-								key.Suffix = ""
-							}
 							r.Sections = append(r.Sections, key)
 						}
 						d.Terminators = append(d.Terminators, r)
@@ -313,9 +310,6 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 							key, err := NewSectionKey(s)
 							if err != nil {
 								return fmt.Errorf("parsing section key %q from %q: %w", s, p.Name, err)
-							}
-							if removeSuffix[key.Number] {
-								key.Suffix = ""
 							}
 							r.Sections = append(r.Sections, key)
 						}
@@ -347,9 +341,6 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 				key, err := NewSectionKey(matches[1])
 				if err != nil {
 					return fmt.Errorf("parsing section key from %q: %w", matches[1], err)
-				}
-				if removeSuffix[key.Number] {
-					key.Suffix = ""
 				}
 				for _, p := range f.Placemarks {
 					d.Sections[key].Waypoints = append(d.Sections[key].Waypoints, Waypoint{
