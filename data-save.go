@@ -153,29 +153,33 @@ func mergeSegments(n1, n2 *Network) ([]*SegmentData, error) {
 
 	var err error
 	sort.Slice(out, func(i, j int) bool {
-		i1 := orderMap[out[i].Segment.Raw][true]
-		j1 := orderMap[out[j].Segment.Raw][true]
+		ip := orderMap[out[i].Segment.Raw][true]
+		jp := orderMap[out[j].Segment.Raw][true]
 
-		i2 := orderMap[out[i].Segment.Raw][false]
-		j2 := orderMap[out[j].Segment.Raw][false]
+		ih := orderMap[out[i].Segment.Raw][false]
+		jh := orderMap[out[j].Segment.Raw][false]
 
-		if (i1 == -1 || j1 == -1) && (i2 == -1 || j2 == -1) {
+		if ip > -1 && jp > -1 && ih > -1 && jh > -1 {
+			lessP := ip < jp
+			lessH := ih < jh
+			if lessP == lessH {
+				return lessP
+			} else {
+				err = fmt.Errorf("incompatible segment order in %q and %q", n1.Debug(), n2.Debug())
+				return false
+			}
+		} else if ih > -1 && jh > -1 {
+			return ih < jh
+		} else if ip > -1 && jp > -1 {
+			return ip < jp
+		} else if ip > -1 && jh > -1 {
+			return ip < jh
+		} else if ih > -1 && jp > -1 {
+			return ih < jp
+		} else {
+			debugf("ip: %d, ih: %d, jp: %d, jh: %d\n", ip, ih, jp, jh)
 			return false
-		} else if i1 == -1 || j1 == -1 {
-			return i2 < j2
-		} else if i2 == -1 || j2 == -1 {
-			return i1 < j1
 		}
-
-		less1 := i1 < j1
-		less2 := i2 < j2
-		if less1 != less2 {
-			//debugfln("%q (#%d) and %q (#%d) in %q: %v", out[i], orderMap[out[i]][true], out[j], orderMap[out[j]][true], n1.Debug(), less1)
-			//debugfln("%q (#%d) and %q (#%d) in %q: %v", out[i], orderMap[out[i]][false], out[j], orderMap[out[j]][false], n2.Debug(), less2)
-			err = fmt.Errorf("incompatible segment order in %q and %q", n1.Debug(), n2.Debug())
-			return false
-		}
-		return less1
 	})
 	if err != nil {
 		return nil, err
