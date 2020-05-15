@@ -11,10 +11,10 @@ import (
 // Network is a collection of Segments which adjoin at nodes. There is a node at the start and end of
 // each segment, and also at the mid point of each segment where another segment's end point adjoins.
 type Network struct {
-	Route     *Route
+	Route *Route
+	Entry *Segment
+
 	Nodes     []*Node
-	Segments  []*Segment
-	Entry     *Segment
 	Straights []*Straight
 
 	// Short edges go from point to point, and can be shorter than a segment where the segment has mid points. len(ShortEdges) >= len(Segments).
@@ -30,15 +30,15 @@ type Network struct {
 	LongEdgePaths map[*Point]*Path
 }
 
-func (n *Network) Signature() string {
-	var parts []string
-	for _, segment := range n.Segments {
-		parts = append(parts, segment.Raw)
-		parts = append(parts, fmt.Sprint(segment.Reversed))
-		parts = append(parts, fmt.Sprint(segment == n.Entry))
-	}
-	return strings.Join(parts, ",")
-}
+//func (n *Network) Signature() string {
+//	var parts []string
+//	for _, segment := range n.Segments {
+//		parts = append(parts, segment.Raw)
+//		//parts = append(parts, fmt.Sprint(segment.Reversed))
+//		parts = append(parts, fmt.Sprint(segment == n.Entry))
+//	}
+//	return strings.Join(parts, ",")
+//}
 
 func (n *Network) FolderName(networkId, networksLength int, withName bool) string {
 	var name string
@@ -58,8 +58,8 @@ func (n *Network) FolderName(networkId, networksLength int, withName bool) strin
 	//}
 
 	if withName {
-		if n.Route.OptionalKey.Variant != "" && n.Segments[0].Name != "" {
-			name += fmt.Sprintf(" (%s)", n.Segments[0].Name)
+		if n.Route.OptionalKey.Variant != "" && n.Route.Segments[0].Name != "" {
+			name += fmt.Sprintf(" (%s)", n.Route.Segments[0].Name)
 		} else if n.Route.OptionalKey.Variant == "" && n.Route.Name != "" {
 			name += fmt.Sprintf(" (%s)", n.Route.Name)
 		}
@@ -68,42 +68,39 @@ func (n *Network) FolderName(networkId, networksLength int, withName bool) strin
 	return name
 }
 
-func (n *Network) String() string {
-	if len(n.Route.Networks) > 1 {
-		return fmt.Sprintf("%s-%d/%d", n.Route.String(), n.Index()+1, len(n.Route.Networks))
-	}
-	return n.Route.String()
-}
+//func (n *Network) String() string {
+//	if len(n.Route.Networks) > 1 {
+//		return fmt.Sprintf("%s-%d/%d", n.Route.String(), n.Index()+1, len(n.Route.Networks))
+//	}
+//	return n.Route.String()
+//}
 
-func (n *Network) Normalise(normalise bool) error {
+func (n *Network) Normalise() error {
 
-	if !normalise {
-		// if normalise has been disabled with a flag (for testing) we still need to run BuildStraights
-		n.BuildStraights()
-		return nil
-	}
+	if n.Route.Regular {
+		// ensure segments all join
+		for i, segment := range n.Route.Segments {
+			if i == 0 {
+				continue
+			}
+			prev := n.Route.Segments[i-1]
+			debugfln("%q and %q are %.0fm apart", prev.Raw, segment.Raw, prev.Line.End().Distance(segment.Line.Start())*1000)
+			if !prev.Line.End().IsClose(segment.Line.Start(), DELTA) {
+				return fmt.Errorf("%q and %q are %dm apart", prev.Raw, segment.Raw, prev.Line.End().Distance(segment.Line.Start())*1000)
+			}
 
-	n.FindEntrySegment()
-
-	if len(n.Entry.StartPoint.Node.Points) > 1 && len(n.Entry.EndPoint.Node.Points) == 1 {
-		n.Entry.Reverse()
+		}
 	}
 
 	n.BuildEdges()
 
 	n.BuildShortEdgePaths()
 
-	n.ReverseSegments()
-
-	for _, segment := range n.Segments {
+	for _, segment := range n.Route.Segments {
 		segment.From = n.ShortEdgePaths[segment.StartPoint].Length
 	}
 
 	n.BuildLongEdgePaths()
-
-	if err := n.Reorder(); err != nil {
-		return fmt.Errorf("reordering: %w", err)
-	}
 
 	n.BuildStraights()
 
@@ -127,9 +124,9 @@ func (n *Network) BuildStraights() {
 			Flushes: []*Flush{newFlush(segment)},
 		}
 	}
-	for i, segment := range n.Segments {
+	for i, segment := range n.Route.Segments {
 		if i > 0 {
-			prev := n.Segments[i-1]
+			prev := n.Route.Segments[i-1]
 			if !prev.EndPoint.Node.Contains(segment.StartPoint) {
 				// new straight
 				n.Straights = append(n.Straights, newStraight(segment))
@@ -281,7 +278,7 @@ func (n *Network) BuildEdges() {
 	// build edges
 	n.ShortEdges = map[*Node][]*Edge{}
 	n.LongEdges = map[*Node][]*Edge{}
-	for _, segment := range n.Segments {
+	for _, segment := range n.Route.Segments {
 		points := segment.Points(true)
 		for i, point := range points {
 			if i == 0 {
@@ -340,13 +337,13 @@ func (n *Network) BuildShortEdgePaths() {
 	explore(&Path{From: n.Entry.StartPoint.Node}, n.Entry.StartPoint.Node)
 }
 
-func (n *Network) ReverseSegments() {
-	for _, segment := range n.Segments {
-		if n.ShortEdgePaths[segment.EndPoint].Length < n.ShortEdgePaths[segment.StartPoint].Length {
-			segment.Reverse()
-		}
-	}
-}
+//func (n *Network) ReverseSegments() {
+//	for _, segment := range n.Segments {
+//		if n.ShortEdgePaths[segment.EndPoint].Length < n.ShortEdgePaths[segment.StartPoint].Length {
+//			segment.Reverse()
+//		}
+//	}
+//}
 
 func (n *Network) BuildLongEdgePaths() {
 	n.LongEdgePaths = map[*Point]*Path{}
@@ -405,122 +402,122 @@ func (n *Network) BuildLongEdgePaths() {
 
 var debugString string
 
-func (n *Network) Reorder() error {
-
-	debugString += fmt.Sprintln("*** Network:", n.Debug())
-	debugString += fmt.Sprintf("Entry: %s\n", n.Entry.String())
-	debugString += fmt.Sprintln("Segments:")
-	for _, segment := range n.Segments {
-		debugString += fmt.Sprintln(segment.String())
-	}
-	debugString += fmt.Sprintln("Points:")
-	for point := range n.ShortEdgePaths {
-		debugString += fmt.Sprintln(point.Debug())
-	}
-	debugString += fmt.Sprintln("Nodes:")
-	for i, node := range n.Nodes {
-		debugString += fmt.Sprintf("%d)", i)
-		for _, point := range node.Points {
-			debugString += fmt.Sprintf(" [%s]", point.Debug())
-		}
-		debugString += fmt.Sprintln()
-	}
-	debugString += fmt.Sprintln("Paths:")
-	for point, path := range n.LongEdgePaths {
-		debugString += fmt.Sprintf("* Point %s: (%.3f) - ", point.Debug(), path.Length)
-		for j, edge := range path.Edges {
-			if j > 0 {
-				debugString += fmt.Sprint(" -> ")
-			}
-			debugString += fmt.Sprint(edge.Segment.String())
-		}
-		if len(path.Edges) == 0 {
-			debugString += fmt.Sprint("(no edges)")
-		}
-		debugString += fmt.Sprintln()
-	}
-
-	usedSegments := map[*Segment]bool{}
-	var orderedSegments []*Segment
-
-	// To start, find the longest path that starts at the entry point. We only consider the shortest path to get to
-	// each point.
-	var longestPath *Path
-	for _, path := range n.LongEdgePaths {
-		if path.From != n.Entry.StartPoint.Node {
-			continue
-		}
-		if longestPath == nil || path.Length > longestPath.Length {
-			longestPath = path
-		}
-	}
-	if longestPath == nil {
-		return fmt.Errorf("couldn't find initial longest path for %s", n.Debug())
-	}
-	for _, edge := range longestPath.Edges {
-		usedSegments[edge.Segment] = true
-		orderedSegments = append(orderedSegments, edge.Segment)
-	}
-
-	// Subsequently find the longest uninterrupted stretch of edges that haven't been used.
-	// Repeat this until all segments have been used. If we fail to find any segments then they might
-	// not be on a shortest path. In that case, just use the original order.
-	for len(usedSegments) < len(n.Segments) {
-		var longestStretch []*Edge
-		var longestLength float64
-		for _, path := range n.LongEdgePaths {
-			// find the first segment that hasn't been used, and walk forward until you find another that has been used.
-			var index int
-			for index < len(path.Edges) {
-				stretch, length := findNextUnusedStretch(usedSegments, path, index)
-				if length > longestLength {
-					longestStretch = stretch
-					longestLength = length
-				}
-				index += len(stretch) + 1
-			}
-		}
-		if len(longestStretch) > 0 {
-			for _, edge := range longestStretch {
-				usedSegments[edge.Segment] = true
-				if n.Route.Regular {
-					// any segments after the main long route in regular routes are added to the
-					// optional routes.
-					return fmt.Errorf("non-linear segments in %s", n.Debug())
-				} else {
-					orderedSegments = append(orderedSegments, edge.Segment)
-				}
-			}
-		} else {
-			for _, segment := range n.Segments {
-				if !usedSegments[segment] {
-					usedSegments[segment] = true
-					if n.Route.Regular {
-						// any segments after the main long route in regular routes are added to the
-						// optional routes.
-						return fmt.Errorf("non-linear segments in %s", n.Debug())
-					} else {
-						orderedSegments = append(orderedSegments, segment)
-					}
-				}
-			}
-		}
-	}
-	debugString += fmt.Sprintln("NEW ORDER:")
-	for i, segment := range orderedSegments {
-		if i > 0 {
-			debugString += fmt.Sprint(" ")
-		}
-		debugString += fmt.Sprint(segment.String())
-	}
-	debugString += fmt.Sprintln()
-	debugString += fmt.Sprintln()
-	n.Segments = make([]*Segment, len(orderedSegments))
-	for i := range orderedSegments {
-		n.Segments[i] = orderedSegments[i]
-	}
-	return nil
-}
+//func (n *Network) Reorder() error {
+//
+//	debugString += fmt.Sprintln("*** Network:", n.Debug())
+//	debugString += fmt.Sprintf("Entry: %s\n", n.Entry.String())
+//	debugString += fmt.Sprintln("Segments:")
+//	for _, segment := range n.Segments {
+//		debugString += fmt.Sprintln(segment.String())
+//	}
+//	debugString += fmt.Sprintln("Points:")
+//	for point := range n.ShortEdgePaths {
+//		debugString += fmt.Sprintln(point.Debug())
+//	}
+//	debugString += fmt.Sprintln("Nodes:")
+//	for i, node := range n.Nodes {
+//		debugString += fmt.Sprintf("%d)", i)
+//		for _, point := range node.Points {
+//			debugString += fmt.Sprintf(" [%s]", point.Debug())
+//		}
+//		debugString += fmt.Sprintln()
+//	}
+//	debugString += fmt.Sprintln("Paths:")
+//	for point, path := range n.LongEdgePaths {
+//		debugString += fmt.Sprintf("* Point %s: (%.3f) - ", point.Debug(), path.Length)
+//		for j, edge := range path.Edges {
+//			if j > 0 {
+//				debugString += fmt.Sprint(" -> ")
+//			}
+//			debugString += fmt.Sprint(edge.Segment.String())
+//		}
+//		if len(path.Edges) == 0 {
+//			debugString += fmt.Sprint("(no edges)")
+//		}
+//		debugString += fmt.Sprintln()
+//	}
+//
+//	usedSegments := map[*Segment]bool{}
+//	var orderedSegments []*Segment
+//
+//	// To start, find the longest path that starts at the entry point. We only consider the shortest path to get to
+//	// each point.
+//	var longestPath *Path
+//	for _, path := range n.LongEdgePaths {
+//		if path.From != n.Entry.StartPoint.Node {
+//			continue
+//		}
+//		if longestPath == nil || path.Length > longestPath.Length {
+//			longestPath = path
+//		}
+//	}
+//	if longestPath == nil {
+//		return fmt.Errorf("couldn't find initial longest path for %s", n.Debug())
+//	}
+//	for _, edge := range longestPath.Edges {
+//		usedSegments[edge.Segment] = true
+//		orderedSegments = append(orderedSegments, edge.Segment)
+//	}
+//
+//	// Subsequently find the longest uninterrupted stretch of edges that haven't been used.
+//	// Repeat this until all segments have been used. If we fail to find any segments then they might
+//	// not be on a shortest path. In that case, just use the original order.
+//	for len(usedSegments) < len(n.Segments) {
+//		var longestStretch []*Edge
+//		var longestLength float64
+//		for _, path := range n.LongEdgePaths {
+//			// find the first segment that hasn't been used, and walk forward until you find another that has been used.
+//			var index int
+//			for index < len(path.Edges) {
+//				stretch, length := findNextUnusedStretch(usedSegments, path, index)
+//				if length > longestLength {
+//					longestStretch = stretch
+//					longestLength = length
+//				}
+//				index += len(stretch) + 1
+//			}
+//		}
+//		if len(longestStretch) > 0 {
+//			for _, edge := range longestStretch {
+//				usedSegments[edge.Segment] = true
+//				if n.Route.Regular {
+//					// any segments after the main long route in regular routes are added to the
+//					// optional routes.
+//					return fmt.Errorf("non-linear segments in %s", n.Debug())
+//				} else {
+//					orderedSegments = append(orderedSegments, edge.Segment)
+//				}
+//			}
+//		} else {
+//			for _, segment := range n.Segments {
+//				if !usedSegments[segment] {
+//					usedSegments[segment] = true
+//					if n.Route.Regular {
+//						// any segments after the main long route in regular routes are added to the
+//						// optional routes.
+//						return fmt.Errorf("non-linear segments in %s", n.Debug())
+//					} else {
+//						orderedSegments = append(orderedSegments, segment)
+//					}
+//				}
+//			}
+//		}
+//	}
+//	debugString += fmt.Sprintln("NEW ORDER:")
+//	for i, segment := range orderedSegments {
+//		if i > 0 {
+//			debugString += fmt.Sprint(" ")
+//		}
+//		debugString += fmt.Sprint(segment.String())
+//	}
+//	debugString += fmt.Sprintln()
+//	debugString += fmt.Sprintln()
+//	n.Segments = make([]*Segment, len(orderedSegments))
+//	for i := range orderedSegments {
+//		n.Segments[i] = orderedSegments[i]
+//	}
+//	return nil
+//}
 
 func findNextUnusedStretch(used map[*Segment]bool, path *Path, fromIndex int) (edges []*Edge, length float64) {
 	for i := fromIndex; i < len(path.Edges); i++ {
@@ -533,77 +530,77 @@ func findNextUnusedStretch(used map[*Segment]bool, path *Path, fromIndex int) (e
 	return edges, length
 }
 
-func (n *Network) FindEntrySegment() {
-	var force string
-	switch {
-	//case n.Route.Regular && n.Route.Section.Key.Code() == "25H" && n.Route.Hiking:
-	//	force = "RR-MR-V@25H-0.0+0.7"
-	//case n.Route.Regular && n.Route.Section.Key.Code() == "25H" && n.Route.Packrafting:
-	//	force = "RP-LK-2@25H-0.0+3.2 (Lago Kruger)"
-	case n.Route.Regular && n.Route.Section.Key.Code() == "91P":
-		force = "RP-RI-1@91P- (Rio Exploradores)"
-	}
-	if force != "" {
-		for _, segment := range n.Segments {
-			if segment.Raw == force {
-				n.Entry = segment
-				return
-			}
-		}
-		panic(fmt.Sprintf("can't find forced entry segment %s", force))
-	}
+//func (n *Network) FindEntrySegment() {
+//	var force string
+//	switch {
+//	//case n.Route.Regular && n.Route.Section.Key.Code() == "25H" && n.Route.Hiking:
+//	//	force = "RR-MR-V@25H-0.0+0.7"
+//	//case n.Route.Regular && n.Route.Section.Key.Code() == "25H" && n.Route.Packrafting:
+//	//	force = "RP-LK-2@25H-0.0+3.2 (Lago Kruger)"
+//	case n.Route.Regular && n.Route.Section.Key.Code() == "91P":
+//		force = "RP-RI-1@91P- (Rio Exploradores)"
+//	}
+//	if force != "" {
+//		for _, segment := range n.Segments {
+//			if segment.Raw == force {
+//				n.Entry = segment
+//				return
+//			}
+//		}
+//		panic(fmt.Sprintf("can't find forced entry segment %s", force))
+//	}
+//
+//	var lower func(s1, s2 *Segment) bool
+//	if n.Route.Regular || n.Route.OptionalKey.Alternatives {
+//		// regular route or hiking alternatives: find lowest From
+//		lower = func(s1, s2 *Segment) bool {
+//			if s1.From == 0.0 && s2.From == 0.0 {
+//				// If we have multiple segments with zero from, the segment code may tell us which should be the entry
+//				// segment. RP => first for packrafting.
+//				var values map[string]int
+//				if n.Route.Packrafting {
+//					values = map[string]int{
+//						"RP": 1,
+//						"RR": 2,
+//						"RH": 3,
+//					}
+//				} else {
+//					values = map[string]int{
+//						"RH": 1,
+//						"RR": 2,
+//						"RP": 3,
+//					}
+//				}
+//				// return true if s1 is the entry segment, false for s2
+//				return values[s1.Code] < values[s2.Code]
+//			}
+//			return s1.From < s2.From
+//		}
+//	} else {
+//		// optional routes: find lowest Count
+//		lower = func(s1, s2 *Segment) bool { return s1.Count < s2.Count }
+//	}
+//	var lowest *Segment
+//	for _, segment := range n.Segments {
+//		if lowest == nil || lower(segment, lowest) {
+//			lowest = segment
+//		}
+//	}
+//	n.Entry = lowest
+//}
 
-	var lower func(s1, s2 *Segment) bool
-	if n.Route.Regular || n.Route.OptionalKey.Alternatives {
-		// regular route or hiking alternatives: find lowest From
-		lower = func(s1, s2 *Segment) bool {
-			if s1.From == 0.0 && s2.From == 0.0 {
-				// If we have multiple segments with zero from, the segment code may tell us which should be the entry
-				// segment. RP => first for packrafting.
-				var values map[string]int
-				if n.Route.Packrafting {
-					values = map[string]int{
-						"RP": 1,
-						"RR": 2,
-						"RH": 3,
-					}
-				} else {
-					values = map[string]int{
-						"RH": 1,
-						"RR": 2,
-						"RP": 3,
-					}
-				}
-				// return true if s1 is the entry segment, false for s2
-				return values[s1.Code] < values[s2.Code]
-			}
-			return s1.From < s2.From
-		}
-	} else {
-		// optional routes: find lowest Count
-		lower = func(s1, s2 *Segment) bool { return s1.Count < s2.Count }
-	}
-	var lowest *Segment
-	for _, segment := range n.Segments {
-		if lowest == nil || lower(segment, lowest) {
-			lowest = segment
-		}
-	}
-	n.Entry = lowest
-}
+//func (n *Network) Debug() string {
+//	return fmt.Sprintf("%s #%d", n.Route.Debug(), n.Index()+1)
+//}
 
-func (n *Network) Debug() string {
-	return fmt.Sprintf("%s #%d", n.Route.Debug(), n.Index()+1)
-}
-
-func (n *Network) Index() int {
-	for i, network := range n.Route.Networks {
-		if network == n {
-			return i
-		}
-	}
-	panic("network not found in route")
-}
+//func (n *Network) Index() int {
+//	for i, network := range n.Route.Networks {
+//		if network == n {
+//			return i
+//		}
+//	}
+//	panic("network not found in route")
+//}
 
 // Path is a path through a network
 type Path struct {

@@ -5,6 +5,7 @@ import "fmt"
 type Bundle struct {
 	Regular map[RegularKey]*Route  // The regular route for this section.
 	Options map[OptionalKey]*Route // Options and variants for this section. For the hiking bundle any options with packrafting terrain type are excluded.
+	Scraped string
 }
 
 // Post build tasks - normalise, tweak elevations for water, calculate stats etc.
@@ -77,13 +78,18 @@ func (k RegularKey) Debug() string {
 }
 
 type OptionalKey struct {
-	Option       int    // Option number. If true => Alternatives == false.
-	Variant      string // Variant code. If true => Alternatives == false.
-	Alternatives bool   // Hiking alternatives for packrafting routes. If true => Option == 0 && Variant == "".
-	Direction    string // Only for the hiking alternatives, may have a direction from the track - e.g. N = North, S = South, "" = All
+	Option            int    // Option number. If true => Alternatives == false.
+	Variant           string // Variant code (one or two upper case letters). If true => Alternatives == false.
+	Alternatives      bool   // Hiking alternatives for packrafting routes. If true => Option == 0 && Variant == "".
+	Direction         string // Only for the hiking alternatives, may have a direction from the track - e.g. N = North, S = South, "" = All
+	Network           string // Network code (one lower case letter) - MIGRATE THIS OUT
+	AlternativesIndex int    // when hiking alternatives have several non-consecutive stretches, a separate route is created for each.
 }
 
 func (k OptionalKey) Debug() string {
+	if k.Alternatives {
+		return "optional HA" + k.Code()
+	}
 	return "optional " + k.Code()
 }
 

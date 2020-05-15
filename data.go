@@ -15,96 +15,6 @@ type Data struct {
 	Important   []Waypoint
 }
 
-func (d *Data) BuildRoutes() error {
-	// Build routes
-	for _, key := range d.Keys {
-		if HAS_SINGLE && key != SINGLE {
-			continue
-		}
-		section := d.Sections[key]
-		buildBundle := func(bundle *Bundle, packrafting bool) {
-			hiking := !packrafting
-			// RR: Regular Route, RH: Regular Hiking Route, RP: Regular Packrafting Route, OH: Optional Hiking Route, OP: Optional Packrafting Route
-			code := "RH"
-			if packrafting {
-				code = "RP"
-			}
-			for _, track := range section.Tracks {
-				if track.Optional {
-					continue
-				}
-				if track.Code == "RR" || track.Code == code {
-					key := RegularKey{Direction: track.Direction}
-					for _, segment := range track.Segments {
-						if bundle.Regular[key] == nil {
-							bundle.Regular[key] = &Route{
-								Section:     section,
-								Regular:     true,
-								RegularKey:  key,
-								Hiking:      hiking,
-								Packrafting: packrafting,
-							}
-						}
-						bundle.Regular[key].Segments = append(bundle.Regular[key].Segments, segment.DuplicateForTrack())
-					}
-				}
-				if packrafting && track.Code == "RH" {
-					key := OptionalKey{Alternatives: true, Direction: track.Direction}
-					for _, segment := range track.Segments {
-						if bundle.Options[key] == nil {
-							bundle.Options[key] = &Route{
-								Section:     section,
-								Regular:     false,
-								OptionalKey: key,
-								Hiking:      hiking,
-								Packrafting: packrafting,
-							}
-						}
-						bundle.Options[key].Segments = append(bundle.Options[key].Segments, segment.DuplicateForTrack())
-					}
-				}
-			}
-
-			// optional routes
-			for _, track := range section.Tracks {
-				if !track.Optional {
-					continue
-				}
-				for _, segment := range track.Segments {
-					if hiking && segment.Code == "OP" {
-						// Exclude all "OP" segments from the hiking bundle
-						continue
-					}
-					key := OptionalKey{Option: track.Option, Variant: segment.Variant}
-					if bundle.Options[key] == nil {
-						bundle.Options[key] = &Route{
-							Section:     section,
-							Regular:     false,
-							OptionalKey: key,
-							Hiking:      hiking,
-							Packrafting: packrafting,
-							Name:        track.Name,
-						}
-					}
-					bundle.Options[key].Segments = append(bundle.Options[key].Segments, segment.DuplicateForTrack())
-				}
-			}
-		}
-
-		// packrafting-only sections don't have a hiking bundle
-		if section.Key.Suffix != "P" {
-			section.Hiking = &Bundle{Regular: map[RegularKey]*Route{}, Options: map[OptionalKey]*Route{}}
-			buildBundle(section.Hiking, false)
-		}
-
-		// all sections have a packrafting bundle
-		section.Packrafting = &Bundle{Regular: map[RegularKey]*Route{}, Options: map[OptionalKey]*Route{}}
-		buildBundle(section.Packrafting, true)
-	}
-
-	return nil
-}
-
 func (d *Data) ForRoutePairs(f func(packrafting, hiking *Route) error) error {
 	for _, key := range d.Keys {
 		section := d.Sections[key]
@@ -189,18 +99,21 @@ func (d *Data) ForRoutes(f func(r *Route) error) error {
 	return nil
 }
 
-func (d *Data) Normalise(normalise bool) error {
+func (d *Data) Normalise() error {
 
 	processRoute := func(r *Route) error {
 		logln("Normalising", r.Debug())
-		if err := r.BuildNetworks(); err != nil {
-			return fmt.Errorf("building networks: %w", err)
+		if err := r.BuildNetwork(); err != nil {
+			return fmt.Errorf("building network: %w", err)
 		}
-		for _, network := range r.Networks {
-			if err := network.Normalise(normalise); err != nil {
-				return fmt.Errorf("normalising network: %w", err)
-			}
-		}
+		//if err := r.Network.Normalise(); err != nil {
+		//	return fmt.Errorf("normalising route: %w", err)
+		//}
+		//for _, network := range r.Networks {
+		//	if err := network.Normalise(normalise); err != nil {
+		//		return fmt.Errorf("normalising network: %w", err)
+		//	}
+		//}
 		return nil
 	}
 

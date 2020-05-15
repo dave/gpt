@@ -189,13 +189,17 @@ func (s *Section) Scrape(cachedir string) error {
 		}
 	})
 
-	s.ScrapedHiking += fmt.Sprintf(HEADING_SYMBOL+" Full information\n\nThe following information may be incomplete and out of date. Be sure to check the up to date source:\n\n%s\n\n", url)
-	s.ScrapedHiking += summaryHiking
-	s.ScrapedHiking += description
+	if s.Hiking != nil {
+		s.Hiking.Scraped += fmt.Sprintf(HEADING_SYMBOL+" Full information\n\nThe following information may be incomplete and out of date. Be sure to check the up to date source:\n\n%s\n\n", url)
+		s.Hiking.Scraped += summaryHiking
+		s.Hiking.Scraped += description
+	}
 
-	s.ScrapedPackrafting += fmt.Sprintf(HEADING_SYMBOL+" Full information\n\nThe following information may be incomplete and out of date. Be sure to check the up to date source:\n\n%s\n\n", url)
-	s.ScrapedPackrafting += summaryPackrafting
-	s.ScrapedPackrafting += description
+	if s.Packrafting != nil {
+		s.Packrafting.Scraped += fmt.Sprintf(HEADING_SYMBOL+" Full information\n\nThe following information may be incomplete and out of date. Be sure to check the up to date source:\n\n%s\n\n", url)
+		s.Packrafting.Scraped += summaryPackrafting
+		s.Packrafting.Scraped += description
+	}
 
 	return nil
 }

@@ -7,8 +7,18 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dave/gpt/geo"
 	"github.com/dave/gpt/kml"
 )
+
+type Mode int
+
+const HIKING Mode = 1
+const PACKRAFTING Mode = 2
+
+var MODES = []Mode{HIKING, PACKRAFTING}
+
+var elevationCache = map[geo.Pos]float64{}
 
 func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 
@@ -21,15 +31,29 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 			pointsFolder = folder
 		}
 	}
+	if tracksFolder == nil {
+		return fmt.Errorf("input file doesn't contain a folder called 'Tracks'")
+	}
+	if pointsFolder == nil {
+		return fmt.Errorf("input file doesn't contain a folder called 'Points'")
+	}
 
-	for _, rootFolder := range tracksFolder.Folders {
-		optional := rootFolder.Name == "Optional Tracks"
-		for _, sectionFolder := range rootFolder.Folders {
+	for _, optionalRegularFolder := range tracksFolder.Folders {
 
-			matches := level2FolderName.FindStringSubmatch(sectionFolder.Name)
+		var optional bool
+		switch optionalRegularFolder.Name {
+		case "Optional Tracks":
+			optional = true
+		case "Regular Tracks":
+			optional = false
+		default:
+			return fmt.Errorf("incorrect name in %q", optionalRegularFolder.Name)
+		}
 
+		for _, sectionFolder := range optionalRegularFolder.Folders {
+			matches := sectionFolderRegex.FindStringSubmatch(sectionFolder.Name)
 			if len(matches) == 0 {
-				return fmt.Errorf("section folder regex match for %q", sectionFolder.Name)
+				return fmt.Errorf("incorrect format for section folder %q", sectionFolder.Name)
 			}
 
 			number, err := strconv.Atoi(matches[1])
@@ -37,229 +61,291 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 				return fmt.Errorf("decoding section number for %q: %w", sectionFolder.Name, err)
 			}
 			suffix := matches[2]
+			name := matches[3]
+
 			key := SectionKey{number, suffix}
+
+			if HAS_SINGLE && key != SINGLE {
+				continue
+			}
 
 			if d.Sections[key] == nil {
 				d.Keys = append(d.Keys, key)
 				d.Sections[key] = &Section{
 					Raw:  sectionFolder.Name,
-					Key:  SectionKey{number, suffix},
-					Name: matches[3],
+					Key:  key,
+					Name: name,
+
+					Hiking:      nil,
+					Packrafting: nil,
+					Waypoints:   nil,
+				}
+			} else {
+				if sectionFolder.Name != d.Sections[key].Raw {
+					return fmt.Errorf("regular / optional section name mismatch %q and %q", sectionFolder.Name, d.Sections[key].Raw)
 				}
 			}
 
 			section := d.Sections[key]
 
-			for _, trackFolder := range sectionFolder.Folders {
-
-				track := &Track{
-					Raw:      trackFolder.Name,
-					Section:  section,
-					Optional: optional,
+			if !optional {
+				var routes []RegularKey
+				folders := map[RegularKey]*kml.Folder{}
+				for _, folder := range sectionFolder.Folders {
+					if folder.Name == "Southbound" {
+						key := RegularKey{Direction: "S"}
+						routes = append(routes, key)
+						folders[key] = folder
+					} else if folder.Name == "Northbound" {
+						key := RegularKey{Direction: "N"}
+						routes = append(routes, key)
+						folders[key] = folder
+					}
 				}
-				section.Tracks = append(section.Tracks, track)
-
-				if matches := level3FolderName1.FindStringSubmatch(trackFolder.Name); len(matches) != 0 {
-					//debugfln("%#v", matches)
-					track.Experimental = matches[1] == "EXP-"
-					track.Code = matches[2]
-					track.Direction = matches[4]
-
-					year, err := strconv.Atoi(matches[5])
-					if err != nil {
-						return fmt.Errorf("decoding year from %q - %q", trackFolder.Name, matches[5])
-					}
-					track.Year = year
-				} else if matches := level3FolderName2.FindStringSubmatch(trackFolder.Name); len(matches) != 0 {
-					option, err := strconv.Atoi(matches[1])
-					if err != nil {
-						return fmt.Errorf("decoding option number from %q - %q", trackFolder.Name, matches[1])
-					}
-					track.Option = option
-					track.Name = matches[2]
-					if matches[4] != "" {
-						year, err := strconv.Atoi(matches[4])
-						if err != nil {
-							return fmt.Errorf("decoding year from %q - %q", trackFolder.Name, matches[3])
-						}
-						track.Year = year
-					}
-				} else if matches := level3FolderName3.FindStringSubmatch(trackFolder.Name); len(matches) != 0 {
-					track.Variants = true
-					if matches[2] != "" {
-						year, err := strconv.Atoi(matches[2])
-						if err != nil {
-							return fmt.Errorf("decoding year from %q - %q", trackFolder.Name, matches[2])
-						}
-						track.Year = year
-					}
-				} else {
-					//debugfln("no track folder regex match for %q", trackFolder.Name)
-					//return fmt.Errorf("no track folder regex match for %q", trackFolder.Name)
+				if len(routes) == 0 {
+					key := RegularKey{Direction: ""}
+					routes = append(routes, key)
+					folders[key] = sectionFolder
 				}
-				for _, segmentPlacemark := range trackFolder.Placemarks {
+				for _, regularKey := range routes {
+					folder := folders[regularKey]
 
-					segment := &Segment{
-						Raw:   segmentPlacemark.Name,
-						Track: track,
+					for _, mode := range MODES {
+
+						type AlternativeMode int
+						const NORMAL AlternativeMode = 1
+						const HIKING_ALTERNATIVES AlternativeMode = 2
+						var ALTERNATIVES_MODES []AlternativeMode
+
+						if mode == HIKING {
+							ALTERNATIVES_MODES = []AlternativeMode{NORMAL}
+						} else {
+							ALTERNATIVES_MODES = []AlternativeMode{NORMAL, HIKING_ALTERNATIVES}
+						}
+
+						for _, altMode := range ALTERNATIVES_MODES {
+
+							optionalKey := OptionalKey{}
+							regular := true
+
+							if altMode == HIKING_ALTERNATIVES {
+								optionalKey.Alternatives = true
+								optionalKey.Direction = regularKey.Direction
+								optionalKey.AlternativesIndex = 0
+								regularKey = RegularKey{}
+								regular = false
+							}
+
+							var routes []*Route
+							route := &Route{
+								Section:     section,
+								Hiking:      mode == HIKING,
+								Packrafting: mode == PACKRAFTING,
+								Regular:     regular,
+								RegularKey:  regularKey,
+								OptionalKey: optionalKey,
+								Name:        "",
+								Segments:    nil,
+							}
+							var prev *Segment
+							for _, placemark := range folder.Placemarks {
+								codes := map[string]bool{}
+								if altMode == HIKING_ALTERNATIVES {
+									codes["RH"] = true
+								} else if mode == PACKRAFTING {
+									codes["RR"] = true
+									codes["RP"] = true
+								} else if mode == HIKING {
+									codes["RR"] = true
+									codes["RH"] = true
+								}
+
+								segment, err := getSegment(route, placemark, elevation, codes)
+								if err != nil {
+									return err
+								}
+								if segment == nil {
+									continue
+								}
+								if prev != nil {
+									// check that segment adjoins prev.
+									adjoins := prev.Line.End().IsClose(segment.Line.Start(), DELTA)
+									if !adjoins {
+										if altMode != HIKING_ALTERNATIVES {
+											return fmt.Errorf("segments %q and %q in %q are not joined", prev.Raw, segment.Raw, route.Debug())
+										}
+										if len(route.Segments) > 0 {
+											routes = append(routes, route)
+										}
+										optionalKey = OptionalKey{
+											Alternatives:      true,
+											Direction:         optionalKey.Direction,
+											AlternativesIndex: optionalKey.AlternativesIndex + 1,
+										}
+										route = &Route{
+											Section:     section,
+											Hiking:      mode == HIKING,
+											Packrafting: mode == PACKRAFTING,
+											Regular:     regular,
+											RegularKey:  regularKey,
+											OptionalKey: optionalKey,
+											Name:        "",
+											Segments:    nil,
+										}
+									}
+								}
+								prev = segment
+								route.Segments = append(route.Segments, segment)
+							}
+							if len(route.Segments) == 0 {
+								continue
+							}
+							routes = append(routes, route)
+
+							for _, route := range routes {
+
+								route.Network = &Network{
+									Route: route,
+									Entry: route.Segments[0],
+								}
+								if altMode == HIKING_ALTERNATIVES {
+									if section.Packrafting == nil {
+										section.Packrafting = &Bundle{
+											Regular: map[RegularKey]*Route{},
+											Options: map[OptionalKey]*Route{},
+										}
+									}
+									if section.Packrafting.Options[route.OptionalKey] != nil {
+										fmt.Printf("%#v\n", route.OptionalKey)
+										return fmt.Errorf("duplicate route HA %q in %q", route.Raw, route.Section.Raw)
+									}
+									section.Packrafting.Options[route.OptionalKey] = route
+								} else if mode == PACKRAFTING {
+									if section.Packrafting == nil {
+										section.Packrafting = &Bundle{
+											Regular: map[RegularKey]*Route{},
+											Options: map[OptionalKey]*Route{},
+										}
+									}
+									if section.Packrafting.Regular[route.RegularKey] != nil {
+										return fmt.Errorf("duplicate route PR %q in %q", route.Raw, route.Section.Raw)
+									}
+									section.Packrafting.Regular[route.RegularKey] = route
+								} else if mode == HIKING {
+									if section.Hiking == nil {
+										section.Hiking = &Bundle{
+											Regular: map[RegularKey]*Route{},
+											Options: map[OptionalKey]*Route{},
+										}
+									}
+									if section.Hiking.Regular[route.RegularKey] != nil {
+										return fmt.Errorf("duplicate route HR %q in %q", route.Raw, route.Section.Raw)
+									}
+									section.Hiking.Regular[route.RegularKey] = route
+								}
+							}
+
+						}
 					}
-
-					switch segmentPlacemark.Name {
-
-					// typeo in "EXP"
-					case "EXO-OP-LK-2@36P-04E-#001":
-						segmentPlacemark.Name = "EXP-OP-LK-2@36P-04E-#001"
-
-					case "Untitled Path":
-						continue
-
-					case "OH-TL-V@34P-01A-#001":
-						segmentPlacemark.Name = "OH-TL-V@33H-06A-#001"
-					case "OH-TL-V@34P-01B-#001":
-						segmentPlacemark.Name = "OH-TL-V@33H-06B-#001"
-					case "OH-TL-V@34P-01C-#001":
-						segmentPlacemark.Name = "OH-TL-V@33H-06C-#001"
-					case "OH-TL-V@34P-01E-#001":
-						segmentPlacemark.Name = "OH-TL-V@33H-06E-#001"
-
-					case "OH-FY-2@22-05A-#002 (Translado Lago Vidal Gormaz)":
-						segmentPlacemark.Name = "OH-FY-2@22-05-#002 (Translado Lago Vidal Gormaz)"
-
-					}
-
-					if matches := placemarkName.FindStringSubmatch(segmentPlacemark.Name); len(matches) == 0 {
-						//debugf("no placemark regex match for %q in %q %q\n", segmentPlacemark.Name, section.String(), track.String())
-						return fmt.Errorf("no placemark regex match for %q in %q %q", segmentPlacemark.Name, section.String(), track.String())
-					} else {
-						//debugfln("%#v", matches)
-						if matches[1] == "EXP-" {
-							segment.Experimental = true
-						}
-						segment.Code = matches[2]
-
-						switch segment.Code {
-						/*
-							RR: Regular Route
-							RH: Regular Hiking Route
-							RP: Regular Packrafting Route
-							OH: Optional Hiking Route
-							OP: Optional Packrafting Route
-						*/
-						case "RR", "RH", "RP":
-							if segment.Track.Optional {
-								// All regular tracks should be in the Regular Tracks folder
-								return fmt.Errorf("segment %q is in Optional Tracks folder", segment.Raw)
-							}
-							if segment.Track.Code != segment.Code {
-								// All regular tracks should be in the correct folder
-								return fmt.Errorf("segment %q is in %q track folder", segment.Raw, segment.Track.Raw)
-							}
-						case "OH", "OP":
-							if !segment.Track.Optional {
-								// All optional tracks should be in the Optional Tracks folder
-								return fmt.Errorf("segment %q is not in Optional Tracks folder", segment.Raw)
-							}
-						}
-						segment.Terrains = strings.Split(matches[3], "&")
-						for _, terrain := range segment.Terrains {
-							desc := Terrain(terrain)
-							if desc == "" {
-								return fmt.Errorf("unexpected terrain code %q in %q", terrain, segment.Raw)
-							}
-						}
-						segment.Verification = matches[4]
-						if segment.Verification != "" {
-							desc := Verification(segment.Verification)
-							if desc == "" {
-								return fmt.Errorf("unexpected verification code %q in %q", segment.Verification, segment.Raw)
-							}
-						}
-						segment.Directional = matches[5]
-						if segment.Directional != "" {
-							desc := Directional(segment.Directional)
-							if desc == "" {
-								return fmt.Errorf("unexpected directional code %q in %q", segment.Directional, segment.Raw)
-							}
-						}
-
-						key, err := NewSectionKey(matches[6] + matches[7])
+				}
+			} else {
+				for _, optionVariantsFolder := range sectionFolder.Folders {
+					routes := map[OptionalKey]bool{}
+					var optionNumber int
+					switch {
+					case optionVariantsFolder.Name == "Variants":
+						optionNumber = 0
+					case strings.HasPrefix(optionVariantsFolder.Name, "Option"):
+						num, err := strconv.Atoi(strings.TrimPrefix(optionVariantsFolder.Name, "Option "))
 						if err != nil {
-							return fmt.Errorf("decoding section number from %q: %w", segmentPlacemark.Name, err)
+							return fmt.Errorf("parsing option number from %q in %q: %w", optionVariantsFolder.Name, section.Raw, err)
 						}
-						if key.Number != segment.Track.Section.Key.Number || key.Suffix != segment.Track.Section.Key.Suffix {
-							//debugfln("segment %q has wrong section number in %q", segmentPlacemark.Name, segment.Track.Section.String())
-							return fmt.Errorf("segment %q has wrong section number in %q", segmentPlacemark.Name, segment.Track.Section.String())
+						optionNumber = num
+					default:
+						return fmt.Errorf("incorrect folder name %q in %q", optionVariantsFolder.Name, section.Raw)
+					}
+					for _, routeFolder := range optionVariantsFolder.Folders {
+						matches := routeFolderRegex.FindStringSubmatch(routeFolder.Name)
+
+						if len(matches) == 0 {
+							return fmt.Errorf("incorrect name format %q in %q in %q", routeFolder.Name, optionVariantsFolder.Name, section.Raw)
 						}
 
-						var option int
-						if matches[12] != "" {
-							option, err = strconv.Atoi(matches[12])
-							if err != nil {
-								return fmt.Errorf("decoding section number from %q", segmentPlacemark.Name)
+						variantCode := matches[2]
+						networkCode := matches[3]
+						routeName := matches[5]
+
+						optionalKey := OptionalKey{
+							Option:  optionNumber,
+							Variant: variantCode,
+							Network: networkCode,
+						}
+						if routes[optionalKey] {
+							return fmt.Errorf("duplicate variant %q in %q in %q in %q", variantCode, routeFolder.Name, optionVariantsFolder.Name, section.Raw)
+						}
+						routes[optionalKey] = true
+
+						for _, mode := range MODES {
+							route := &Route{
+								Section:     section,
+								Hiking:      mode == HIKING,
+								Packrafting: mode == PACKRAFTING,
+								Regular:     false,
+								RegularKey:  RegularKey{},
+								OptionalKey: optionalKey,
+								Name:        routeName,
+								Segments:    nil,
 							}
-						}
-						if option != segment.Track.Option {
-							return fmt.Errorf("incorrect option %q is in %q", segment.Raw, segment.Track.Raw)
-						}
-
-						segment.Variant = matches[13]
-						if segment.Option == 0 && segment.Variant != "" && !segment.Track.Variants {
-							return fmt.Errorf("%q is not in variants folder %q", segment.Raw, segment.Track.Raw)
-						}
-
-						if matches[14] != "" {
-							count, err := strconv.Atoi(matches[14])
-							if err != nil {
-								return fmt.Errorf("decoding count number from %q", segmentPlacemark.Name)
-							}
-							segment.Count = count
-						}
-
-						if matches[16] != "" {
-							from, err := strconv.ParseFloat(matches[16], 64)
-							if err != nil {
-								return fmt.Errorf("decoding from number %q from %q", matches[16], segmentPlacemark.Name)
-							}
-							segment.From = from
-						} else {
-							segment.From = 999 // to stop these from being treated as segment start points
-						}
-
-						// Removed length from name - always calculate (below).
-						/*
-							if matches[15] != "" {
-								length, err := strconv.ParseFloat(matches[15], 64)
-								if err != nil {
-									return fmt.Errorf("decoding length number %q from %q", matches[15], segmentPlacemark.Name)
+							for _, segmentPlacemark := range routeFolder.Placemarks {
+								codes := map[string]bool{}
+								switch mode {
+								case HIKING:
+									codes["OH"] = true
+								case PACKRAFTING:
+									codes["OH"] = true
+									codes["OP"] = true
 								}
-								segment.Length = length
-							}
-						*/
-
-						segment.Name = matches[19]
-
-						var ls kml.LineString
-						if segmentPlacemark.LineString == nil {
-							ls = *segmentPlacemark.MultiGeometry.LineStrings[0]
-						} else {
-							ls = *segmentPlacemark.LineString
-						}
-						segment.Line = ls.Line()
-						segment.Length = ls.Line().Length()
-
-						if elevation {
-							logf("Getting elevations for %s\n", segment.String())
-							// lookup elevations
-							for i := range segment.Line {
-								elevation, err := SrtmClient.GetElevation(http.DefaultClient, segment.Line[i].Lat, segment.Line[i].Lon)
+								segment, err := getSegment(route, segmentPlacemark, elevation, codes)
 								if err != nil {
-									return fmt.Errorf("looking up elevation for %q: %w", segment.Raw, err)
+									return err
 								}
-								segment.Line[i].Ele = elevation
+								if segment == nil {
+									continue
+								}
+								route.Segments = append(route.Segments, segment)
+							}
+							if len(route.Segments) == 0 {
+								continue
+							}
+							route.Network = &Network{
+								Route: route,
+								Entry: route.Segments[0],
+							}
+							if mode == PACKRAFTING {
+								if section.Packrafting == nil {
+									section.Packrafting = &Bundle{
+										Regular: map[RegularKey]*Route{},
+										Options: map[OptionalKey]*Route{},
+									}
+								}
+								if section.Packrafting.Options[optionalKey] != nil {
+									return fmt.Errorf("duplicate route PO %q in %q", route.Raw, route.Section.Raw)
+								}
+								section.Packrafting.Options[optionalKey] = route
+							} else if mode == HIKING {
+								if section.Hiking == nil {
+									section.Hiking = &Bundle{
+										Regular: map[RegularKey]*Route{},
+										Options: map[OptionalKey]*Route{},
+									}
+								}
+								if section.Hiking.Options[optionalKey] != nil {
+									return fmt.Errorf("duplicate route HO %q in %q", route.Raw, route.Section.Raw)
+								}
+								section.Hiking.Options[optionalKey] = route
 							}
 						}
 					}
-					track.Segments = append(track.Segments, segment)
 				}
 			}
 		}
@@ -392,11 +478,62 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 	return nil
 }
 
-var level2FolderName = regexp.MustCompile(`^GPT(\d{2})([HP]?)-(.*)$`)
-var level3FolderName1 = regexp.MustCompile(`^(EXP-)?([A-Z]{2})(\(?([NS])\)?)? \((\d{4})\)$`)
-var level3FolderName2 = regexp.MustCompile(`^Option (\d{1,2}) ([^(]*)( \((\d{4})\))?$`)
-var level3FolderName3 = regexp.MustCompile(`^Variants( \((\d{4})\))?$`)
-var placemarkName = regexp.MustCompile(`^(EXP-)?([A-Z]{2})-([A-Z&]{2,})-([VAI]?)([12]?)@(\d{2})([PH]?)(\(([NS])\))?-(((\d{2})?([A-Z]?)-)?#(\d{3})|((\d+\.\d+)\+(\d+\.\d+))?)( \((.*)\))?$`)
+func getSegment(route *Route, placemark *kml.Placemark, elevation bool, codes map[string]bool) (*Segment, error) {
+	matches := segmentPlacemarkRegex.FindStringSubmatch(placemark.Name)
+
+	if len(matches) == 0 {
+		return nil, fmt.Errorf("unknown format in placemark %q", placemark.Name)
+	}
+
+	if placemark.GetLineString() == nil {
+		return nil, fmt.Errorf("placemark %q has no line string", placemark.Name)
+	}
+
+	if !codes[matches[3]] {
+		return nil, nil
+	}
+
+	segment := &Segment{
+		Route:        route,
+		Raw:          placemark.Name,
+		Experimental: matches[2] == "EXP",
+		Code:         matches[3],
+		Terrains:     strings.Split(matches[4], "&"),
+		Verification: matches[7],
+		Directional:  matches[8],
+		From:         0, // calculated later
+		Length:       placemark.GetLineString().Line().Length(),
+		Name:         matches[10],
+		Line:         placemark.GetLineString().Line(),
+		StartPoint:   nil,
+		EndPoint:     nil,
+		MidPoints:    nil,
+	}
+
+	if elevation {
+		logf("Getting elevations for %s\n", segment.String())
+		for i := range segment.Line {
+			// SrtmClient.GetElevation is slow even when cached, so we make our own cache.
+			pos := geo.Pos{Lat: segment.Line[i].Lat, Lon: segment.Line[i].Lon}
+			ele, found := elevationCache[pos]
+			if !found {
+				var err error
+				ele, err = SrtmClient.GetElevation(http.DefaultClient, pos.Lat, pos.Lon)
+				if err != nil {
+					return nil, fmt.Errorf("looking up elevation for %q: %w", segment.Raw, err)
+				}
+				elevationCache[pos] = ele
+			}
+			segment.Line[i].Ele = ele
+		}
+	}
+	return segment, nil
+}
+
+var sectionFolderRegex = regexp.MustCompile(`^GPT([0-9]{2})([HP])? \((.*)\)$`)
+var segmentPlacemarkRegex = regexp.MustCompile(`^((EXP)-)?(RH|RP|RR|OH|OP)-(((BB|CC|MR|PR|TL|FJ|LK|RI|FY)&?)+)-?([VAI])?([12])? {.*} \[.*] ?(\((.*)\))?$`)
+var routeFolderRegex = regexp.MustCompile(`^([0-9]{2})?([A-Z]{1,2})?([a-z])? ?(\((.*)\))?$`)
+
 var regularTerminatorName = regexp.MustCompile(`^([0-9/GTHP]+) (.*)?\((.*)\)$`)
 var optionsTerminatorName = regexp.MustCompile(`^([0-9/GTHP]+)(-([A-Z]))? \((.*)\)$`)
 var waypointSectionFolderName = regexp.MustCompile(`^([0-9/GTHP]+)-.*$`)

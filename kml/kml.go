@@ -178,6 +178,13 @@ type Placemark struct {
 	Legacy        string         `xml:"legacy,attr,omitempty"`
 }
 
+func (p Placemark) GetLineString() *LineString {
+	if p.LineString == nil && p.MultiGeometry != nil && len(p.MultiGeometry.LineStrings) > 0 {
+		return p.MultiGeometry.LineStrings[0]
+	}
+	return p.LineString
+}
+
 type Point struct {
 	Coordinates string `xml:"coordinates"`
 }

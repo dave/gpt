@@ -8,15 +8,12 @@ import (
 
 // Section is a section folder
 type Section struct {
-	Raw                string // raw name of the section folder
-	Key                SectionKey
-	Name               string   // name of the section
-	Tracks             []*Track // raw tracks from the kml data
-	Hiking             *Bundle  // If this section has a regular route that does not include packrafting, it's here.
-	Packrafting        *Bundle  // This is the regular route for this section with packrafting trails chosen when possible.
-	Waypoints          []Waypoint
-	ScrapedPackrafting string
-	ScrapedHiking      string
+	Raw         string // raw name of the section folder
+	Key         SectionKey
+	Name        string  // name of the section
+	Hiking      *Bundle // If this section has a regular route that does not include packrafting, it's here.
+	Packrafting *Bundle // This is the regular route for this section with packrafting trails chosen when possible.
+	Waypoints   []Waypoint
 }
 
 func (s Section) FolderName() string {

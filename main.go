@@ -37,8 +37,8 @@ func Main() error {
 	single := flag.String("single", "", "only process a single section (for testing)")
 	ele := flag.Bool("ele", true, "lookup elevations")
 	scrape := flag.Bool("scrape", true, "scrape descriptions from wikiexplora")
-	normalise := flag.Bool("normalise", true, "normalise routes")
-	output := flag.String("output", "./output", "output dir")
+	//output := flag.String("output", "./output", "output dir")
+	_ = flag.String("output", "./output", "output dir")
 	//stamp := flag.String("stamp", fmt.Sprintf("%04d%02d%02d", time.Now().Year(), time.Now().Month(), time.Now().Day()), "date stamp for output files")
 	_ = flag.String("stamp", fmt.Sprintf("%04d%02d%02d", time.Now().Year(), time.Now().Month(), time.Now().Day()), "date stamp for output files")
 	version := flag.Bool("version", false, "show version")
@@ -87,17 +87,15 @@ func Main() error {
 		}
 	}
 
-	if err := data.BuildRoutes(); err != nil {
-		return fmt.Errorf("building routes: %w", err)
-	}
-
-	if err := data.Normalise(*normalise); err != nil {
+	if err := data.Normalise(); err != nil {
 		return fmt.Errorf("normalising: %w", err)
 	}
 
-	if err := data.SaveMaster(*output); err != nil {
-		return fmt.Errorf("saving master file: %w", err)
-	}
+	return nil
+
+	//if err := data.SaveMaster(*output); err != nil {
+	//	return fmt.Errorf("saving master file: %w", err)
+	//}
 
 	/*
 		if err := data.SaveGaia(*output); err != nil {
