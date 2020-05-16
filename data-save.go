@@ -173,9 +173,9 @@ func mergeSegments(n1, n2 *Network) ([]*SegmentData, error) {
 		} else if ip > -1 && jp > -1 {
 			return ip < jp
 		} else if ip > -1 && jh > -1 {
-			return false
+			return ip < jh
 		} else if ih > -1 && jp > -1 {
-			return true
+			return ih < jp
 		} else {
 			debugf("ip: %d, ih: %d, jp: %d, jh: %d\n", ip, ih, jp, jh)
 			return false
