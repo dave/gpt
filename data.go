@@ -192,6 +192,9 @@ func (d *Data) ForRoutes(f func(r *Route) error) error {
 func (d *Data) Normalise(normalise bool) error {
 
 	processRoute := func(r *Route) error {
+		//if r.Debug() != "GPT28H packrafting - option 1 (Rio Turbio)" {
+		//	return nil
+		//}
 		logln("Normalising", r.Debug())
 		if err := r.BuildNetworks(); err != nil {
 			return fmt.Errorf("building networks: %w", err)
@@ -201,6 +204,12 @@ func (d *Data) Normalise(normalise bool) error {
 				return fmt.Errorf("normalising network: %w", err)
 			}
 		}
+		//for i, network := range r.Networks {
+		//	fmt.Println(i, network.Debug())
+		//	for i2, segment := range network.Segments {
+		//		fmt.Println("  ", i2, segment.Raw)
+		//	}
+		//}
 		return nil
 	}
 
