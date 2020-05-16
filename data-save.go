@@ -164,7 +164,7 @@ func mergeSegments(n1, n2 *Network) ([]*SegmentData, error) {
 				index[opposite]++
 			}
 			index[mode]++
-			index[opposite]++
+			//index[opposite]++
 		}
 		//mode = opposite
 	}
