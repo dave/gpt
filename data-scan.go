@@ -13,7 +13,7 @@ import (
 func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 
 	var tracksFolder, pointsFolder *kml.Folder
-	for _, folder := range inputRoot.Document.Folders {
+	for _, folder := range inputRoot.Document.Folders[0].Folders {
 		switch folder.Name {
 		case "Tracks":
 			tracksFolder = folder
