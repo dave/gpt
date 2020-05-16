@@ -188,6 +188,19 @@ func mergeSegments(n1, n2 *Network) ([]*SegmentData, error) {
 	allRaw := map[string]bool{}
 	for _, segment := range ordered {
 		if allRaw[segment.Raw] {
+
+			fmt.Println("")
+			fmt.Println("PR")
+			for i, s := range sp {
+				fmt.Printf("%d) %s\n", i, s.Raw)
+			}
+			fmt.Println("")
+			fmt.Println("H")
+			for i, s := range sh {
+				fmt.Printf("%d) %s\n", i, s.Raw)
+			}
+			fmt.Println("")
+			fmt.Println("")
 			panic(segment.Raw)
 		}
 		allRaw[segment.Raw] = true
