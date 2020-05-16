@@ -22,8 +22,13 @@ var elevationCache = map[geo.Pos]float64{}
 
 func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 
+	folders := inputRoot.Document.Folders
+	if len(folders) == 1 && folders[0].Name == "GPT Master" {
+		folders = folders[0].Folders
+	}
+
 	var tracksFolder, pointsFolder *kml.Folder
-	for _, folder := range inputRoot.Document.Folders {
+	for _, folder := range folders {
 		switch folder.Name {
 		case "Tracks":
 			tracksFolder = folder
