@@ -21,6 +21,13 @@ type SegmentData struct {
 	PackraftingFrom, HikingFrom float64
 }
 
+type Mode int
+
+const HIKE Mode = 1
+const RAFT Mode = 2
+
+var MODES = []Mode{HIKE, RAFT}
+
 func (d SegmentData) PlacemarkName(networkId, networksLength int, n *Network) string {
 	var b strings.Builder
 	s := d.Segment
@@ -91,7 +98,7 @@ func mergeSegments(n1, n2 *Network) ([]*SegmentData, error) {
 	}
 	sp, sh := np.Segments, nh.Segments
 
-	var out []*SegmentData
+	//var out []*SegmentData
 	all := map[string]bool{}
 	allP := map[string]*Segment{}
 	allH := map[string]*Segment{}
@@ -99,24 +106,14 @@ func mergeSegments(n1, n2 *Network) ([]*SegmentData, error) {
 		allP[segment.Raw] = segment
 		if !all[segment.Raw] {
 			all[segment.Raw] = true
-			out = append(out, &SegmentData{Segment: segment})
+			//out = append(out, &SegmentData{Segment: segment})
 		}
 	}
 	for _, segment := range sh {
 		allH[segment.Raw] = segment
 		if !all[segment.Raw] {
 			all[segment.Raw] = true
-			out = append(out, &SegmentData{Segment: segment})
-		}
-	}
-	for _, data := range out {
-		if allP[data.Segment.Raw] != nil {
-			data.HasPackrafting = true
-			data.PackraftingFrom = allP[data.Segment.Raw].From
-		}
-		if allH[data.Segment.Raw] != nil {
-			data.HasHiking = true
-			data.HikingFrom = allH[data.Segment.Raw].From
+			//out = append(out, &SegmentData{Segment: segment})
 		}
 	}
 
@@ -137,53 +134,132 @@ func mergeSegments(n1, n2 *Network) ([]*SegmentData, error) {
 		}
 	}
 
-	orderMap := map[string]map[bool]int{}
-	for i, segment := range sp {
-		if orderMap[segment.Raw] == nil {
-			orderMap[segment.Raw] = map[bool]int{true: -1, false: -1}
-		}
-		orderMap[segment.Raw][true] = i
-	}
-	for i, segment := range sh {
-		if orderMap[segment.Raw] == nil {
-			orderMap[segment.Raw] = map[bool]int{true: -1, false: -1}
-		}
-		orderMap[segment.Raw][false] = i
-	}
-
-	var err error
-	sort.Slice(out, func(i, j int) bool {
-		ip := orderMap[out[i].Segment.Raw][true]
-		jp := orderMap[out[j].Segment.Raw][true]
-
-		ih := orderMap[out[i].Segment.Raw][false]
-		jh := orderMap[out[j].Segment.Raw][false]
-
-		if ip > -1 && jp > -1 && ih > -1 && jh > -1 {
-			lessP := ip < jp
-			lessH := ih < jh
-			if lessP == lessH {
-				return lessP
-			} else {
-				err = fmt.Errorf("incompatible segment order in %q and %q", n1.Debug(), n2.Debug())
-				return false
+	search := func(segments []*Segment, from int, raw string) (found bool, index int) {
+		for i := from; i < len(segments); i++ {
+			if segments[i].Raw == raw {
+				return true, i
 			}
-		} else if ih > -1 && jh > -1 {
-			return ih < jh
-		} else if ip > -1 && jp > -1 {
-			return ip < jp
-		} else if ip > -1 && jh > -1 {
-			return ip < jh
-		} else if ih > -1 && jp > -1 {
-			return ih < jp
-		} else {
-			debugf("ip: %d, ih: %d, jp: %d, jh: %d\n", ip, ih, jp, jh)
-			return false
 		}
-	})
-	if err != nil {
-		return nil, err
+		return false, 0
 	}
+	var ordered []*Segment
+	segments := map[Mode][]*Segment{HIKE: sh, RAFT: sp}
+	index := map[Mode]int{HIKE: 0, RAFT: 0}
+	mode := HIKE
+	for index[HIKE] < len(segments[HIKE]) && index[RAFT] < len(segments[RAFT]) {
+		var opposite Mode
+		if mode == HIKE {
+			opposite = RAFT
+		} else {
+			opposite = HIKE
+		}
+		current := segments[mode][index[mode]]
+		found, foundIndex := search(segments[opposite], index[opposite], current.Raw)
+		if !found {
+			ordered = append(ordered, current)
+			index[mode]++
+		} else {
+			for i := index[opposite]; i <= foundIndex; i++ {
+				ordered = append(ordered, segments[opposite][i])
+				index[opposite]++
+			}
+			index[mode]++
+			index[opposite]++
+		}
+		//mode = opposite
+	}
+
+	var out []*SegmentData
+	for _, segment := range ordered {
+		data := &SegmentData{
+			Segment: segment,
+		}
+		if allP[segment.Raw] != nil {
+			data.HasPackrafting = true
+			data.PackraftingFrom = allP[segment.Raw].From
+		}
+		if allH[segment.Raw] != nil {
+			data.HasHiking = true
+			data.HikingFrom = allH[segment.Raw].From
+		}
+		out = append(out, data)
+	}
+
+	allRaw := map[string]bool{}
+	for _, segment := range ordered {
+		if allRaw[segment.Raw] {
+			panic(segment.Raw)
+		}
+		allRaw[segment.Raw] = true
+	}
+
+	//orderMap := map[string]map[bool]int{}
+	//for i, segment := range sp {
+	//	if orderMap[segment.Raw] == nil {
+	//		orderMap[segment.Raw] = map[bool]int{true: -1, false: -1}
+	//	}
+	//	orderMap[segment.Raw][true] = i
+	//}
+	//for i, segment := range sh {
+	//	if orderMap[segment.Raw] == nil {
+	//		orderMap[segment.Raw] = map[bool]int{true: -1, false: -1}
+	//	}
+	//	orderMap[segment.Raw][false] = i
+	//}
+	//
+	//var err error
+	//sort.Slice(out, func(i, j int) bool {
+	//	ip := orderMap[out[i].Segment.Raw][true]
+	//	jp := orderMap[out[j].Segment.Raw][true]
+	//
+	//	ih := orderMap[out[i].Segment.Raw][false]
+	//	jh := orderMap[out[j].Segment.Raw][false]
+	//
+	//	if ip > -1 && jp > -1 && ih > -1 && jh > -1 {
+	//		lessP := ip < jp
+	//		lessH := ih < jh
+	//		if lessP == lessH {
+	//			return lessP
+	//		} else {
+	//			err = fmt.Errorf("incompatible segment order in %q and %q", n1.Debug(), n2.Debug())
+	//			return false
+	//		}
+	//	} else if ih > -1 && jh > -1 {
+	//		return ih < jh
+	//	} else if ip > -1 && jp > -1 {
+	//		return ip < jp
+	//	} else if ip > -1 && jh > -1 {
+	//		// find the nearest item nearest jh that exists in jp both lists
+	//		j1 := j
+	//		jp := -1
+	//		for jp == -1 && j1 > 0 {
+	//			j1--
+	//			jp = orderMap[out[j1].Segment.Raw][true]
+	//		}
+	//		if jp == -1 {
+	//			jp = 0
+	//		}
+	//		return ip < jp
+	//	} else if ih > -1 && jp > -1 {
+	//		// find the nearest item nearest jh that exists in jp both lists
+	//		j1 := j
+	//		jh := -1
+	//		for jh == -1 && j1 > 0 {
+	//			j1--
+	//			jh = orderMap[out[j1].Segment.Raw][false]
+	//		}
+	//		if jh == -1 {
+	//			jh = 0
+	//		}
+	//		return ih < jh
+	//	} else {
+	//		debugf("ip: %d, ih: %d, jp: %d, jh: %d\n", ip, ih, jp, jh)
+	//		return false
+	//	}
+	//})
+	//if err != nil {
+	//	return nil, err
+	//}
 	return out, nil
 }
 
