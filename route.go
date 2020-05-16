@@ -220,6 +220,10 @@ func (r *Route) BuildNetworks() error {
 				{"EXP-OP-TL-V@92P-A-#003 end": true},
 				{"EXP-OP-TL-V@92P-A-#003 #6": true},
 			},
+			{
+				{"OP-MR-V@28H-01-#001": true, "OP-LK-2@28H-01-#002 (Lago Verde)": true, "OP-LK-2@28H-01-#003 (Lago Verde)": true, "OP-TL-V@28H-01-#004": true, "OH-TL-V@28H-01-#005": true, "OH-TL-I@28H-01-#006 start": true},
+				{"OP-MR-V@28H-01-#009": true, "OP-LK-2@28H-01-#008 (Lago Verde)": true, "OP-RI-1@28H-01-#007 (Rio Turbio) #266": true, "OP-RI-1@28H-01-#007 (Rio Turbio) end": true},
+			},
 		}
 
 		needToSeparate := func(node *Node) (bool, [][]*Point) {

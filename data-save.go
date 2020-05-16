@@ -146,13 +146,23 @@ func mergeSegments(n1, n2 *Network) ([]*SegmentData, error) {
 	segments := map[Mode][]*Segment{HIKE: sh, RAFT: sp}
 	index := map[Mode]int{HIKE: 0, RAFT: 0}
 	mode := HIKE
-	for index[HIKE] < len(segments[HIKE]) && index[RAFT] < len(segments[RAFT]) {
+	for index[HIKE] < len(segments[HIKE]) || index[RAFT] < len(segments[RAFT]) {
 		var opposite Mode
 		if mode == HIKE {
 			opposite = RAFT
 		} else {
 			opposite = HIKE
 		}
+
+		if index[mode] >= len(segments[mode]) {
+			// if we've reached the end of mode, drain opposite
+			for i := index[opposite]; i < len(segments[opposite]); i++ {
+				ordered = append(ordered, segments[opposite][i])
+				index[opposite]++
+			}
+			break
+		}
+
 		current := segments[mode][index[mode]]
 		found, foundIndex := search(segments[opposite], index[opposite], current.Raw)
 		if !found {
@@ -186,7 +196,7 @@ func mergeSegments(n1, n2 *Network) ([]*SegmentData, error) {
 	}
 
 	//fmt.Println("***")
-	//fmt.Println("PR")
+	//fmt.Println("P")
 	//for i, s := range sp {
 	//	fmt.Printf("%d) %s\n", i, s.Raw)
 	//}
@@ -196,7 +206,10 @@ func mergeSegments(n1, n2 *Network) ([]*SegmentData, error) {
 	//	fmt.Printf("%d) %s\n", i, s.Raw)
 	//}
 	//fmt.Println("")
-	//fmt.Println("")
+	//fmt.Println("OUT")
+	//for i, data := range out {
+	//	fmt.Printf("%d) %s\n", i, data.Segment.Raw)
+	//}
 
 	allRaw := map[string]bool{}
 	for _, segment := range ordered {
@@ -380,6 +393,9 @@ func (d *Data) SaveMaster(dpath string) error {
 		return nil
 	}
 	process := func(packrafting, hiking *Route) error {
+		//if packrafting.Debug() != "GPT28H packrafting - option 1 (Rio Turbio)" {
+		//	return nil
+		//}
 		if packrafting != nil && !packrafting.Regular && packrafting.OptionalKey.Alternatives {
 			// for hiking alternatives these segments are already included in the regular routes
 			return nil
