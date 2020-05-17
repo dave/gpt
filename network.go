@@ -11,8 +11,10 @@ import (
 // Network is a collection of Segments which adjoin at nodes. There is a node at the start and end of
 // each segment, and also at the mid point of each segment where another segment's end point adjoins.
 type Network struct {
-	Route *Route
-	Entry *Segment
+	Route         *Route
+	RouteModeData *RouteModeData
+	Entry         *Segment
+	Mode          ModeType
 
 	Nodes     []*Node
 	Straights []*Straight
@@ -40,33 +42,33 @@ type Network struct {
 //	return strings.Join(parts, ",")
 //}
 
-func (n *Network) FolderName(networkId, networksLength int, withName bool) string {
-	var name string
-	if n.Route.OptionalKey.Option > 0 {
-		name = fmt.Sprintf("%02d%s", n.Route.OptionalKey.Option, n.Route.OptionalKey.Variant)
-	} else {
-		name = n.Route.OptionalKey.Variant
-	}
-	if networksLength > 1 {
-		name += string('a' + networkId)
-	}
-
-	//if len(n.Route.Networks) >= 10 {
-	//	name += fmt.Sprintf(" %02d/%02d", n.Index()+1, len(n.Route.Networks))
-	//} else if len(n.Route.Networks) > 1 {
-	//	name += fmt.Sprintf(" %d/%d", n.Index()+1, len(n.Route.Networks))
-	//}
-
-	if withName {
-		if n.Route.OptionalKey.Variant != "" && n.Route.Segments[0].Name != "" {
-			name += fmt.Sprintf(" (%s)", n.Route.Segments[0].Name)
-		} else if n.Route.OptionalKey.Variant == "" && n.Route.Name != "" {
-			name += fmt.Sprintf(" (%s)", n.Route.Name)
-		}
-	}
-
-	return name
-}
+//func (n *Network) FolderName(networkId, networksLength int, withName bool) string {
+//	var name string
+//	if n.Route.OptionalKey.Option > 0 {
+//		name = fmt.Sprintf("%02d%s", n.Route.OptionalKey.Option, n.Route.OptionalKey.Variant)
+//	} else {
+//		name = n.Route.OptionalKey.Variant
+//	}
+//	if networksLength > 1 {
+//		name += string('a' + networkId)
+//	}
+//
+//	//if len(n.Route.Networks) >= 10 {
+//	//	name += fmt.Sprintf(" %02d/%02d", n.Index()+1, len(n.Route.Networks))
+//	//} else if len(n.Route.Networks) > 1 {
+//	//	name += fmt.Sprintf(" %d/%d", n.Index()+1, len(n.Route.Networks))
+//	//}
+//
+//	if withName {
+//		if n.Route.OptionalKey.Variant != "" && n.Route.Segments[0].Name != "" {
+//			name += fmt.Sprintf(" (%s)", n.Route.Segments[0].Name)
+//		} else if n.Route.OptionalKey.Variant == "" && n.Route.Name != "" {
+//			name += fmt.Sprintf(" (%s)", n.Route.Name)
+//		}
+//	}
+//
+//	return name
+//}
 
 //func (n *Network) String() string {
 //	if len(n.Route.Networks) > 1 {
@@ -77,27 +79,12 @@ func (n *Network) FolderName(networkId, networksLength int, withName bool) strin
 
 func (n *Network) Normalise() error {
 
-	if n.Route.Regular {
-		// ensure segments all join
-		for i, segment := range n.Route.Segments {
-			if i == 0 {
-				continue
-			}
-			prev := n.Route.Segments[i-1]
-			debugfln("%q and %q are %.0fm apart", prev.Raw, segment.Raw, prev.Line.End().Distance(segment.Line.Start())*1000)
-			if !prev.Line.End().IsClose(segment.Line.Start(), DELTA) {
-				return fmt.Errorf("%q and %q are %dm apart", prev.Raw, segment.Raw, prev.Line.End().Distance(segment.Line.Start())*1000)
-			}
-
-		}
-	}
-
 	n.BuildEdges()
 
 	n.BuildShortEdgePaths()
 
-	for _, segment := range n.Route.Segments {
-		segment.From = n.ShortEdgePaths[segment.StartPoint].Length
+	for _, segment := range n.Route.Modes[n.Mode].Segments {
+		segment.Modes[n.Mode].From = n.ShortEdgePaths[segment.Modes[n.Mode].StartPoint].Length
 	}
 
 	n.BuildLongEdgePaths()
@@ -112,7 +99,7 @@ func (n *Network) Normalise() error {
 func (n *Network) BuildStraights() {
 	newFlush := func(segment *Segment) *Flush {
 		return &Flush{
-			From:         segment.From,
+			From:         segment.Modes[n.Mode].From,
 			Terrains:     segment.Terrains,
 			Verification: segment.Verification,
 			Directional:  segment.Directional,
@@ -124,10 +111,10 @@ func (n *Network) BuildStraights() {
 			Flushes: []*Flush{newFlush(segment)},
 		}
 	}
-	for i, segment := range n.Route.Segments {
+	for i, segment := range n.RouteModeData.Segments {
 		if i > 0 {
-			prev := n.Route.Segments[i-1]
-			if !prev.EndPoint.Node.Contains(segment.StartPoint) {
+			prev := n.RouteModeData.Segments[i-1]
+			if !prev.Modes[n.Mode].EndPoint.Node.Contains(segment.Modes[n.Mode].StartPoint) {
 				// new straight
 				n.Straights = append(n.Straights, newStraight(segment))
 			} else if !prev.Similar(segment) {
@@ -278,8 +265,9 @@ func (n *Network) BuildEdges() {
 	// build edges
 	n.ShortEdges = map[*Node][]*Edge{}
 	n.LongEdges = map[*Node][]*Edge{}
-	for _, segment := range n.Route.Segments {
-		points := segment.Points(true)
+	for _, segment := range n.RouteModeData.Segments {
+		segmentMode := segment.Modes[n.Mode]
+		points := segmentMode.Points(true)
 		for i, point := range points {
 			if i == 0 {
 				continue
@@ -305,11 +293,11 @@ func (n *Network) BuildEdges() {
 		}
 		edge := &Edge{
 			Segment: segment,
-			Nodes:   [2]*Node{segment.StartPoint.Node, segment.EndPoint.Node},
+			Nodes:   [2]*Node{segment.Modes[n.Mode].StartPoint.Node, segment.Modes[n.Mode].EndPoint.Node},
 			Length:  segment.Line.Length(),
 		}
-		n.LongEdges[segment.StartPoint.Node] = append(n.LongEdges[segment.StartPoint.Node], edge)
-		n.LongEdges[segment.EndPoint.Node] = append(n.LongEdges[segment.EndPoint.Node], edge)
+		n.LongEdges[segment.Modes[n.Mode].StartPoint.Node] = append(n.LongEdges[segment.Modes[n.Mode].StartPoint.Node], edge)
+		n.LongEdges[segment.Modes[n.Mode].EndPoint.Node] = append(n.LongEdges[segment.Modes[n.Mode].EndPoint.Node], edge)
 	}
 }
 
@@ -334,7 +322,7 @@ func (n *Network) BuildShortEdgePaths() {
 			explore(path.CopyAndAdd(edge), edge.Opposite(node))
 		}
 	}
-	explore(&Path{From: n.Entry.StartPoint.Node}, n.Entry.StartPoint.Node)
+	explore(&Path{From: n.Entry.Modes[n.Mode].StartPoint.Node}, n.Entry.Modes[n.Mode].StartPoint.Node)
 }
 
 //func (n *Network) ReverseSegments() {
@@ -389,7 +377,7 @@ func (n *Network) BuildLongEdgePaths() {
 					continue
 				}
 				// only traverse this edge if we are at the start of it's segment
-				if !node.Contains(edge.Segment.StartPoint) {
+				if !node.Contains(edge.Segment.Modes[n.Mode].StartPoint) {
 					continue
 				}
 				// all other points attached to this node

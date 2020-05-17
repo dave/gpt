@@ -8,7 +8,7 @@ import (
 	"github.com/dave/gpt/geo"
 )
 
-// Segment is a placemark / linestring in a track folder
+// Segment is a placemark / linestring
 type Segment struct {
 	Route        *Route
 	Raw          string   // raw name of the placemark
@@ -17,13 +17,76 @@ type Segment struct {
 	Terrains     []string // terrain codes from segment name - BB: Bush Bashing, CC: Cross Country, MR: Minor Road, PR: Primary or Paved Road, TL: Horse or Hiking Trail, FJ: Fjord Packrafting, LK: Lake Packrafting, RI: River Packrafting, FY: Ferry
 	Verification string   // verification status - V: Verified Route, A: Approximate Route, I: Investigation Route
 	Directional  string   // directional status - 1: One-Way Route, 2: Two-Way Route
-	From         float64  // calculated from km
 	Length       float64  // calculated length km
 	Name         string   // named feature
+	Legacy       string   // name before last rename job
 	Line         geo.Line
-	StartPoint   *Point
-	EndPoint     *Point
-	MidPoints    []*Point
+	Modes        map[ModeType]*SegmentModeData
+}
+
+type SegmentModeData struct {
+	From       float64
+	StartPoint *Point
+	EndPoint   *Point
+	MidPoints  []*Point
+}
+
+func (s Segment) PlacemarkName() string {
+	var b strings.Builder
+
+	if s.Experimental {
+		b.WriteString("EXP")
+		b.WriteString("-")
+	}
+	b.WriteString(s.Code)
+	b.WriteString("-")
+	b.WriteString(strings.Join(s.Terrains, "&"))
+	if s.Verification != "" || s.Directional != "" {
+		b.WriteString("-")
+		b.WriteString(s.Verification)
+		b.WriteString(s.Directional)
+	}
+
+	b.WriteString(" {")
+	b.WriteString(s.Route.Section.Key.Code())
+	b.WriteString(s.Route.Key.Direction)
+	if s.Route.Key.Required == OPTIONAL {
+		b.WriteString("-")
+		if s.Route.Key.Option > 0 {
+			b.WriteString(fmt.Sprintf("%02d", s.Route.Key.Option))
+		}
+		b.WriteString(s.Route.Key.Variant)
+		if s.Route.Key.Network != "" {
+			b.WriteString(s.Route.Key.Network)
+		}
+	}
+	b.WriteString("}")
+
+	b.WriteString(" [")
+	if hike, raft := s.Modes[HIKE], s.Modes[RAFT]; hike != nil && raft != nil {
+
+		if fmt.Sprintf("%.1f", raft.From) == fmt.Sprintf("%.1f", hike.From) {
+			b.WriteString(fmt.Sprintf("%.1f", raft.From))
+		} else {
+			b.WriteString(fmt.Sprintf("%.1f", raft.From))
+			b.WriteString("/")
+			b.WriteString(fmt.Sprintf("%.1f", hike.From))
+		}
+	} else if raft != nil {
+		b.WriteString(fmt.Sprintf("%.1f", raft.From))
+	} else if hike != nil {
+		b.WriteString(fmt.Sprintf("%.1f", hike.From))
+	}
+	b.WriteString("+")
+	b.WriteString(fmt.Sprintf("%.1f", s.Length))
+	b.WriteString("]")
+
+	if s.Name != "" {
+		b.WriteString(" (")
+		b.WriteString(s.Name)
+		b.WriteString(")")
+	}
+	return b.String()
 }
 
 //func (s *Segment) DuplicateForTrack() *Segment {
@@ -84,7 +147,7 @@ type Segment struct {
 //	}
 //}
 
-func (s *Segment) Points(reorder bool) []*Point {
+func (s *SegmentModeData) Points(reorder bool) []*Point {
 	if reorder {
 		// Make sure mid points are ordered correctly
 		sort.Slice(s.MidPoints, func(i, j int) bool { return s.MidPoints[i].Index < s.MidPoints[j].Index })
@@ -92,41 +155,41 @@ func (s *Segment) Points(reorder bool) []*Point {
 	return append([]*Point{s.StartPoint, s.EndPoint}, s.MidPoints...)
 }
 
-func (s Segment) String() string {
-	var b strings.Builder
-	if s.Experimental {
-		b.WriteString("EXP")
-		b.WriteString("-")
-	}
-	b.WriteString(s.Code)
-	b.WriteString("-")
-	b.WriteString(strings.Join(s.Terrains, "&"))
-	if s.Verification != "" || s.Directional != "" {
-		b.WriteString("-")
-		b.WriteString(s.Verification)
-		b.WriteString(s.Directional)
-	}
-	b.WriteString("@")
-	b.WriteString(s.Route.Section.Key.Code())
-	if !s.Route.Regular {
-		b.WriteString("-")
-		if s.Route.OptionalKey.Option > 0 {
-			b.WriteString(fmt.Sprintf("%02d", s.Route.OptionalKey.Option))
-		}
-		b.WriteString(s.Route.OptionalKey.Variant)
-		//b.WriteString("-")
-		//b.WriteString(fmt.Sprintf("#%03d", s.Count))
-	} else {
-		b.WriteString("-")
-		b.WriteString(fmt.Sprintf("%.1f+%.1f", s.From, s.Length))
-	}
-	if s.Name != "" {
-		b.WriteString(" (")
-		b.WriteString(s.Name)
-		b.WriteString(")")
-	}
-	return b.String()
-}
+//func (s Segment) String() string {
+//	var b strings.Builder
+//	if s.Experimental {
+//		b.WriteString("EXP")
+//		b.WriteString("-")
+//	}
+//	b.WriteString(s.Code)
+//	b.WriteString("-")
+//	b.WriteString(strings.Join(s.Terrains, "&"))
+//	if s.Verification != "" || s.Directional != "" {
+//		b.WriteString("-")
+//		b.WriteString(s.Verification)
+//		b.WriteString(s.Directional)
+//	}
+//	b.WriteString("@")
+//	b.WriteString(s.Route.Section.Key.Code())
+//	if s.Route.Key.Required == OPTIONAL {
+//		b.WriteString("-")
+//		if s.Route.Key.Option > 0 {
+//			b.WriteString(fmt.Sprintf("%02d", s.Route.Key.Option))
+//		}
+//		b.WriteString(s.Route.Key.Variant)
+//		//b.WriteString("-")
+//		//b.WriteString(fmt.Sprintf("#%03d", s.Count))
+//	} else {
+//		b.WriteString("-")
+//		b.WriteString(fmt.Sprintf("%.1f+%.1f", s.From, s.Length))
+//	}
+//	if s.Name != "" {
+//		b.WriteString(" (")
+//		b.WriteString(s.Name)
+//		b.WriteString(")")
+//	}
+//	return b.String()
+//}
 
 var weights = map[string]float64{
 	"thick": 3,
@@ -204,7 +267,7 @@ func (s Segment) Style() string {
 		color = "white" // white - #ffffff
 	}
 
-	if s.Route.Regular {
+	if s.Route.Key.Required == REGULAR {
 		weight = "thick"
 	} else {
 		weight = "thin"

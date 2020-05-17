@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,70 +10,6 @@ import (
 	"github.com/dave/gpt/geo"
 	"github.com/dave/gpt/kml"
 )
-
-type SegmentData struct {
-	Segment                     *Segment
-	HasPackrafting, HasHiking   bool
-	PackraftingFrom, HikingFrom float64
-}
-
-func (d SegmentData) PlacemarkName(networkId, networksLength int, n *Network) string {
-	var b strings.Builder
-	s := d.Segment
-
-	if s.Experimental {
-		b.WriteString("EXP")
-		b.WriteString("-")
-	}
-	b.WriteString(s.Code)
-	b.WriteString("-")
-	b.WriteString(strings.Join(s.Terrains, "&"))
-	if s.Verification != "" || s.Directional != "" {
-		b.WriteString("-")
-		b.WriteString(s.Verification)
-		b.WriteString(s.Directional)
-	}
-
-	b.WriteString(" {")
-	b.WriteString(n.Route.Section.Key.Code())
-	b.WriteString(n.Route.RegularKey.Direction)
-	if !n.Route.Regular {
-		b.WriteString("-")
-		if n.Route.OptionalKey.Option > 0 {
-			b.WriteString(fmt.Sprintf("%02d", n.Route.OptionalKey.Option))
-		}
-		b.WriteString(n.Route.OptionalKey.Variant)
-		if networksLength > 1 {
-			b.WriteString(string('a' + networkId))
-		}
-	}
-	b.WriteString("}")
-
-	b.WriteString(" [")
-	if d.HasHiking && d.HasPackrafting {
-		if fmt.Sprintf("%.1f", d.PackraftingFrom) == fmt.Sprintf("%.1f", d.HikingFrom) {
-			b.WriteString(fmt.Sprintf("%.1f", d.PackraftingFrom))
-		} else {
-			b.WriteString(fmt.Sprintf("%.1f", d.PackraftingFrom))
-			b.WriteString("/")
-			b.WriteString(fmt.Sprintf("%.1f", d.HikingFrom))
-		}
-	} else if d.HasPackrafting {
-		b.WriteString(fmt.Sprintf("%.1f", d.PackraftingFrom))
-	} else if d.HasHiking {
-		b.WriteString(fmt.Sprintf("%.1f", d.HikingFrom))
-	}
-	b.WriteString("+")
-	b.WriteString(fmt.Sprintf("%.1f", s.Length))
-	b.WriteString("]")
-
-	if s.Name != "" {
-		b.WriteString(" (")
-		b.WriteString(s.Name)
-		b.WriteString(")")
-	}
-	return b.String()
-}
 
 //func mergeSegments(n1, n2 *Network) ([]*SegmentData, error) {
 //
@@ -194,240 +131,136 @@ func (d SegmentData) PlacemarkName(networkId, networksLength int, n *Network) st
 
 //var counter, counterRoutes int
 
-//func (d *Data) SaveMaster(dpath string) error {
-//	logln("Saving kml master")
-//	regular := map[SectionKey]map[RegularKey]*kml.Folder{}
-//	optional := map[SectionKey]map[int]map[OptionalKey][]*kml.Folder{}
-//	var renames []struct{ from, to string }
-//
-//	writeNetwork := func(networkId, networksLength int, n, n1 *Network) error {
-//
-//		var segments []*SegmentData
-//		if n1 == nil {
-//			for _, segment := range n.Segments {
-//				sd := &SegmentData{Segment: segment}
-//				if n.Route.Packrafting {
-//					sd.HasPackrafting = true
-//					sd.PackraftingFrom = segment.From
-//				} else {
-//					sd.HasHiking = true
-//					sd.HikingFrom = segment.From
-//				}
-//				segments = append(segments, sd)
-//			}
-//
-//		} else {
-//			s, err := mergeSegments(n, n1)
-//			if err != nil {
-//				return err
-//			}
-//			segments = s
-//		}
-//		var f *kml.Folder
-//		if n.Route.Regular {
-//			if regular[n.Route.Section.Key] == nil {
-//				regular[n.Route.Section.Key] = map[RegularKey]*kml.Folder{}
-//			}
-//			if regular[n.Route.Section.Key][n.Route.RegularKey] == nil {
-//				switch n.Route.RegularKey.Direction {
-//				case "S":
-//					regular[n.Route.Section.Key][n.Route.RegularKey] = &kml.Folder{Name: "Southbound"}
-//				case "N":
-//					regular[n.Route.Section.Key][n.Route.RegularKey] = &kml.Folder{Name: "Northbound"}
-//				default:
-//					regular[n.Route.Section.Key][n.Route.RegularKey] = &kml.Folder{Name: n.Route.Section.FolderName()}
-//				}
-//			}
-//			f = regular[n.Route.Section.Key][n.Route.RegularKey]
-//		} else {
-//			if optional[n.Route.Section.Key] == nil {
-//				optional[n.Route.Section.Key] = map[int]map[OptionalKey][]*kml.Folder{}
-//			}
-//			if optional[n.Route.Section.Key][n.Route.OptionalKey.Option] == nil {
-//				optional[n.Route.Section.Key][n.Route.OptionalKey.Option] = map[OptionalKey][]*kml.Folder{}
-//			}
-//			f = &kml.Folder{Name: n.FolderName(networkId, networksLength, true)}
-//			optional[n.Route.Section.Key][n.Route.OptionalKey.Option][n.Route.OptionalKey] = append(optional[n.Route.Section.Key][n.Route.OptionalKey.Option][n.Route.OptionalKey], f)
-//		}
-//
-//		for _, segment := range segments {
-//			f.Placemarks = append(f.Placemarks, &kml.Placemark{
-//				Name:     segment.PlacemarkName(networkId, networksLength, n),
-//				Legacy:   segment.Segment.Raw,
-//				Open:     1,
-//				StyleUrl: fmt.Sprintf("#%s", segment.Segment.Style()),
-//				LineString: &kml.LineString{
-//					Tessellate:  true,
-//					Coordinates: kml.LineCoordinates(segment.Segment.Line),
-//				},
-//			})
-//			if segment.Segment.Raw != segment.PlacemarkName(networkId, networksLength, n) {
-//				renames = append(renames, struct{ from, to string }{from: segment.Segment.Raw, to: segment.PlacemarkName(networkId, networksLength, n)})
-//			}
-//		}
-//
-//		return nil
-//	}
-//	process := func(packrafting, hiking *Route) error {
-//		if packrafting != nil && !packrafting.Regular && packrafting.OptionalKey.Alternatives {
-//			// for hiking alternatives these segments are already included in the regular routes
-//			return nil
-//		}
-//		var r, r1 *Route
-//		if packrafting != nil {
-//			r = packrafting
-//			r1 = hiking
-//		} else if hiking != nil {
-//			r = hiking
-//			r1 = packrafting
-//		} else {
-//			return fmt.Errorf("packrafting and hiking routes both nil")
-//		}
-//		if r1 != nil {
-//			doneInR1 := map[*Network]bool{}
-//			var unique []struct{ n, n1 *Network }
-//			for _, n := range r.Networks {
-//				matches := findNetworksWithMatchingSegments(n, r1.Networks)
-//				if len(matches) > 1 {
-//					var errstring string
-//					errstring += fmt.Sprintf("%s has segments from more than one other network (probably hiking split by packrafting without a proper joining segment):\n", n.Debug())
-//					for i, count := range matches {
-//						errstring += fmt.Sprintf("%s: %d segments\n", r1.Networks[i].Debug(), count)
-//					}
-//					return errors.New(errstring)
-//				}
-//				var n1 *Network
-//				if len(matches) == 1 {
-//					for i := range matches {
-//						n1 = r1.Networks[i]
-//					}
-//				}
-//				if n1 != nil {
-//					doneInR1[n1] = true
-//				}
-//				unique = append(unique, struct{ n, n1 *Network }{n: n, n1: n1})
-//			}
-//			for _, n1 := range r1.Networks {
-//				if doneInR1[n1] {
-//					continue
-//				}
-//				unique = append(unique, struct{ n, n1 *Network }{n: n1, n1: nil})
-//			}
-//			for i, u := range unique {
-//				if err := writeNetwork(i, len(unique), u.n, u.n1); err != nil {
-//					return err
-//				}
-//			}
-//			//if len(unique) > 1 && !r.Regular {
-//			//	counter += len(unique)
-//			//	counterRoutes++
-//			//	debugfln("%s: %d networks", r.Debug(), len(unique))
-//			//}
-//		} else {
-//			for i, n := range r.Networks {
-//				if err := writeNetwork(i, len(r.Networks), n, nil); err != nil {
-//					return err
-//				}
-//			}
-//
-//			//if len(r.Networks) > 1 && !r.Regular {
-//			//	counter += len(r.Networks)
-//			//	counterRoutes++
-//			//	debugfln("%s: %d networks", r.Debug(), len(r.Networks))
-//			//}
-//		}
-//
-//		return nil
-//	}
-//	if err := d.ForRoutePairs(process); err != nil {
-//		return fmt.Errorf("generating master: %w", err)
-//	}
-//
-//	rf := &kml.Folder{Name: "Regular Tracks"}
-//	for key, routes := range regular {
-//		if len(routes) == 1 {
-//			if routes[RegularKey{""}] == nil {
-//				panic("route not found")
-//			}
-//			rf.Folders = append(rf.Folders, routes[RegularKey{""}])
-//		} else if len(routes) == 2 {
-//			if routes[RegularKey{"N"}] == nil || routes[RegularKey{"S"}] == nil {
-//				panic("routes not found")
-//			}
-//			rf.Folders = append(rf.Folders, &kml.Folder{
-//				Name:    d.Sections[key].FolderName(),
-//				Folders: []*kml.Folder{routes[RegularKey{"N"}], routes[RegularKey{"S"}]},
-//			})
-//		} else {
-//			panic("wrong number of routes")
-//		}
-//	}
-//	sort.Slice(rf.Folders, func(i, j int) bool {
-//		return rf.Folders[i].Name < rf.Folders[j].Name
-//	})
-//
-//	of := &kml.Folder{Name: "Optional Tracks"}
-//	for key, options := range optional {
-//		sec := &kml.Folder{Name: d.Sections[key].FolderName()}
-//		of.Folders = append(of.Folders, sec)
-//		for optionNumber, routes := range options {
-//			var name string
-//			if optionNumber == 0 {
-//				name = "Variants"
-//			} else {
-//				name = fmt.Sprintf("Option %d", optionNumber)
-//			}
-//			op := &kml.Folder{Name: name}
-//			sec.Folders = append(sec.Folders, op)
-//			for _, networks := range routes {
-//				for _, folder := range networks {
-//					op.Folders = append(op.Folders, folder)
-//				}
-//			}
-//			sort.Slice(op.Folders, func(i, j int) bool {
-//				return op.Folders[i].Name < op.Folders[j].Name
-//			})
-//		}
-//		sort.Slice(sec.Folders, func(i, j int) bool {
-//			extractInt := func(s string) int {
-//				var i int
-//				if s != "Variants" {
-//					i, _ = strconv.Atoi(strings.TrimPrefix(s, "Option "))
-//				}
-//				return i
-//			}
-//			return extractInt(sec.Folders[i].Name) < extractInt(sec.Folders[j].Name)
-//		})
-//	}
-//	sort.Slice(of.Folders, func(i, j int) bool {
-//		return of.Folders[i].Name < of.Folders[j].Name
-//	})
-//
-//	doc := kml.Document{
-//		Name:    "GPT Master.kmz",
-//		Folders: []*kml.Folder{{Name: "Tracks", Folders: []*kml.Folder{rf, of}}},
-//	}
-//	addSegmentStyles(&doc)
-//
-//	root := kml.Root{
-//		Xmlns:    "http://www.opengis.net/kml/2.2",
-//		Document: doc,
-//	}
-//	if err := root.Save(filepath.Join(dpath, "GPT Master.kmz")); err != nil {
-//		return fmt.Errorf("saving master: %w", err)
-//	}
-//
-//	var sb strings.Builder
-//	for _, rename := range renames {
-//		sb.WriteString(fmt.Sprintf("%q, %q\n", rename.from, rename.to))
-//	}
-//	if err := ioutil.WriteFile(filepath.Join(dpath, "renames.txt"), []byte(sb.String()), 0666); err != nil {
-//		return fmt.Errorf("writing renames file: %w", err)
-//	}
-//
-//	//debugfln("%d unique networks, %d routes", counter, counterRoutes)
-//	return nil
-//}
+func (d *Data) SaveMaster(dpath string, updateLegacy bool) error {
+	logln("saving kml master")
+	var renames []struct{ from, to string }
+
+	tracksFolder := &kml.Folder{Name: "Tracks"}
+
+	for _, required := range REQUIRED_TYPES {
+		rootFolder := &kml.Folder{}
+		switch required {
+		case REGULAR:
+			rootFolder.Name = "Regular Tracks"
+		case OPTIONAL:
+			rootFolder.Name = "Optional Tracks"
+		}
+		tracksFolder.Folders = append(tracksFolder.Folders, rootFolder)
+		for _, sectionKey := range d.Keys {
+			section := d.Sections[sectionKey]
+			sectionFolder := &kml.Folder{Name: section.FolderName()}
+			rootFolder.Folders = append(rootFolder.Folders, sectionFolder)
+			optionalRouteHolderFolders := map[int]*kml.Folder{} // option number
+
+			for _, routeKey := range section.RouteKeys {
+				route := section.Routes[routeKey]
+				if route.Key.Alternatives {
+					// all hiking alternatives are already in the regular routes
+					continue
+				}
+				if route.Key.Required != required {
+					continue
+				}
+				var routeFolder *kml.Folder
+				switch route.Key.Required {
+				case REGULAR:
+					switch route.Key.Direction {
+					case "S":
+						routeFolder = &kml.Folder{Name: "Southbound"}
+						sectionFolder.Folders = append(sectionFolder.Folders, routeFolder)
+					case "N":
+						routeFolder = &kml.Folder{Name: "Northbound"}
+						sectionFolder.Folders = append(sectionFolder.Folders, routeFolder)
+					default:
+						routeFolder = sectionFolder
+					}
+				case OPTIONAL:
+					var routeHolderFolder *kml.Folder
+					if f := optionalRouteHolderFolders[route.Key.Option]; f != nil {
+						routeHolderFolder = f
+					} else {
+						if route.Key.Option == 0 {
+							routeHolderFolder = &kml.Folder{Name: "Variants"}
+						} else {
+							routeHolderFolder = &kml.Folder{Name: fmt.Sprintf("Option %d", route.Key.Option)}
+						}
+						//routeFolder = &kml.Folder{Name: route.FolderName()}
+						optionalRouteHolderFolders[route.Key.Option] = routeHolderFolder
+						sectionFolder.Folders = append(sectionFolder.Folders, routeHolderFolder)
+					}
+					routeFolder = &kml.Folder{Name: route.FolderName()}
+					routeHolderFolder.Folders = append(routeHolderFolder.Folders, routeFolder)
+				default:
+					panic("")
+				}
+				for _, segment := range route.All {
+					legacy := segment.Legacy
+					if updateLegacy {
+						legacy = segment.PlacemarkName()
+					}
+					routeFolder.Placemarks = append(routeFolder.Placemarks, &kml.Placemark{
+						Name:     segment.PlacemarkName(),
+						Legacy:   legacy,
+						Open:     1,
+						StyleUrl: fmt.Sprintf("#%s", segment.Style()),
+						LineString: &kml.LineString{
+							Tessellate:  true,
+							Coordinates: kml.LineCoordinates(segment.Line),
+						},
+					})
+					if segment.Legacy != segment.PlacemarkName() {
+						renames = append(renames, struct{ from, to string }{from: segment.Legacy, to: segment.PlacemarkName()})
+					}
+				}
+			}
+		}
+	}
+
+	//
+	//sort.Slice(rf.Folders, func(i, j int) bool {
+	//	return rf.Folders[i].Name < rf.Folders[j].Name
+	//})
+
+	//	sort.Slice(sec.Folders, func(i, j int) bool {
+	//		extractInt := func(s string) int {
+	//			var i int
+	//			if s != "Variants" {
+	//				i, _ = strconv.Atoi(strings.TrimPrefix(s, "Option "))
+	//			}
+	//			return i
+	//		}
+	//		return extractInt(sec.Folders[i].Name) < extractInt(sec.Folders[j].Name)
+	//	})
+	//
+	//sort.Slice(of.Folders, func(i, j int) bool {
+	//	return of.Folders[i].Name < of.Folders[j].Name
+	//})
+
+	doc := kml.Document{
+		Name:    "GPT Master.kmz",
+		Folders: []*kml.Folder{tracksFolder},
+	}
+	addSegmentStyles(&doc)
+
+	root := kml.Root{
+		Xmlns:    "http://www.opengis.net/kml/2.2",
+		Document: doc,
+	}
+	if err := root.Save(filepath.Join(dpath, "GPT Master.kmz")); err != nil {
+		return fmt.Errorf("saving master: %w", err)
+	}
+
+	if updateLegacy {
+		var sb strings.Builder
+		for _, rename := range renames {
+			sb.WriteString(fmt.Sprintf("%q, %q\n", rename.from, rename.to))
+		}
+		if err := ioutil.WriteFile(filepath.Join(dpath, "renames.txt"), []byte(sb.String()), 0666); err != nil {
+			return fmt.Errorf("writing renames file: %w", err)
+		}
+	}
+	return nil
+}
 
 func (d *Data) SaveKmlWaypoints(dpath string, stamp string) error {
 	logln("Saving kml waypoints")

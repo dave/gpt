@@ -15,12 +15,26 @@ import (
 
 var SrtmClient *geoelevations.Srtm
 
-const VERSION = "v0.0.26"
+const VERSION = "v0.1.1"
 const DELTA = 0.075 // see https://docs.google.com/spreadsheets/d/1q610i2TkfUTHWvtqVAJ0V8zFtzPMQKBXEm7jiPyuDCQ/edit
 
 var LOG, DEBUG bool
 var HAS_SINGLE bool
 var SINGLE SectionKey
+
+type ModeType int
+
+const HIKE ModeType = 0
+const RAFT ModeType = 1
+
+var MODES = []ModeType{HIKE, RAFT}
+
+type RequiredType int
+
+const REGULAR RequiredType = 0
+const OPTIONAL RequiredType = 1
+
+var REQUIRED_TYPES = []RequiredType{REGULAR, OPTIONAL}
 
 func main() {
 	if err := Main(); err != nil {
@@ -37,8 +51,8 @@ func Main() error {
 	single := flag.String("single", "", "only process a single section (for testing)")
 	ele := flag.Bool("ele", true, "lookup elevations")
 	scrape := flag.Bool("scrape", true, "scrape descriptions from wikiexplora")
-	//output := flag.String("output", "./output", "output dir")
-	_ = flag.String("output", "./output", "output dir")
+	output := flag.String("output", "./output", "output dir")
+	renames := flag.Bool("renames", false, "create rename log file and RESET legacy names in master file")
 	//stamp := flag.String("stamp", fmt.Sprintf("%04d%02d%02d", time.Now().Year(), time.Now().Month(), time.Now().Day()), "date stamp for output files")
 	_ = flag.String("stamp", fmt.Sprintf("%04d%02d%02d", time.Now().Year(), time.Now().Month(), time.Now().Day()), "date stamp for output files")
 	version := flag.Bool("version", false, "show version")
@@ -46,6 +60,8 @@ func Main() error {
 
 	LOG = *logger
 	DEBUG = *debugger
+
+	logln("initialising")
 
 	if *single != "" {
 		key, err := NewSectionKey(*single)
@@ -82,6 +98,7 @@ func Main() error {
 	}
 
 	if *scrape {
+		logln("web scraping")
 		if err := data.Scrape(); err != nil {
 			return fmt.Errorf("scraping web: %w", err)
 		}
@@ -91,11 +108,11 @@ func Main() error {
 		return fmt.Errorf("normalising: %w", err)
 	}
 
-	return nil
+	if err := data.SaveMaster(*output, *renames); err != nil {
+		return fmt.Errorf("saving master file: %w", err)
+	}
 
-	//if err := data.SaveMaster(*output); err != nil {
-	//	return fmt.Errorf("saving master file: %w", err)
-	//}
+	return nil
 
 	/*
 		if err := data.SaveGaia(*output); err != nil {

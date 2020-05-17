@@ -11,14 +11,14 @@ import (
 	"github.com/dave/gpt/kml"
 )
 
-type Mode int
-
-const HIKING Mode = 1
-const PACKRAFTING Mode = 2
-
-var MODES = []Mode{HIKING, PACKRAFTING}
-
 var elevationCache = map[geo.Pos]float64{}
+
+type AlternativeType int
+
+const NORMAL AlternativeType = 1
+const HIKING_ALTERNATIVES AlternativeType = 2
+
+var ALTERNATIVE_TYPES = []AlternativeType{NORMAL, HIKING_ALTERNATIVES}
 
 func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 
@@ -45,12 +45,14 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 
 	for _, optionalRegularFolder := range tracksFolder.Folders {
 
-		var optional bool
+		var required RequiredType
 		switch optionalRegularFolder.Name {
 		case "Optional Tracks":
-			optional = true
+			logln("scanning optional tracks")
+			required = OPTIONAL
 		case "Regular Tracks":
-			optional = false
+			logln("scanning regular tracks")
+			required = REGULAR
 		default:
 			return fmt.Errorf("incorrect name in %q", optionalRegularFolder.Name)
 		}
@@ -68,104 +70,93 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 			suffix := matches[2]
 			name := matches[3]
 
-			key := SectionKey{number, suffix}
+			sectionKey := SectionKey{number, suffix}
 
-			if HAS_SINGLE && key != SINGLE {
+			if HAS_SINGLE && sectionKey != SINGLE {
 				continue
 			}
 
-			if d.Sections[key] == nil {
-				d.Keys = append(d.Keys, key)
-				d.Sections[key] = &Section{
-					Raw:  sectionFolder.Name,
-					Key:  key,
-					Name: name,
-
-					Hiking:      nil,
-					Packrafting: nil,
-					Waypoints:   nil,
+			if d.Sections[sectionKey] == nil {
+				d.Keys = append(d.Keys, sectionKey)
+				d.Sections[sectionKey] = &Section{
+					Raw:       sectionFolder.Name,
+					Key:       sectionKey,
+					Name:      name,
+					Routes:    map[RouteKey]*Route{},
+					Waypoints: nil,
+					Scraped:   map[ModeType]string{},
 				}
 			} else {
-				if sectionFolder.Name != d.Sections[key].Raw {
-					return fmt.Errorf("regular / optional section name mismatch %q and %q", sectionFolder.Name, d.Sections[key].Raw)
+				if sectionFolder.Name != d.Sections[sectionKey].Raw {
+					return fmt.Errorf("regular / optional section name mismatch %q and %q", sectionFolder.Name, d.Sections[sectionKey].Raw)
 				}
 			}
 
-			section := d.Sections[key]
+			section := d.Sections[sectionKey]
 
-			if !optional {
-				var routes []RegularKey
-				folders := map[RegularKey]*kml.Folder{}
+			if required == REGULAR {
+				var routeKeys []RouteKey
+				routeFolders := map[RouteKey]*kml.Folder{}
 				for _, folder := range sectionFolder.Folders {
 					if folder.Name == "Southbound" {
-						key := RegularKey{Direction: "S"}
-						routes = append(routes, key)
-						folders[key] = folder
+						key := RouteKey{Required: REGULAR, Direction: "S"}
+						routeKeys = append(routeKeys, key)
+						routeFolders[key] = folder
 					} else if folder.Name == "Northbound" {
-						key := RegularKey{Direction: "N"}
-						routes = append(routes, key)
-						folders[key] = folder
+						key := RouteKey{Required: REGULAR, Direction: "N"}
+						routeKeys = append(routeKeys, key)
+						routeFolders[key] = folder
 					}
 				}
-				if len(routes) == 0 {
-					key := RegularKey{Direction: ""}
-					routes = append(routes, key)
-					folders[key] = sectionFolder
+				if len(routeKeys) == 0 {
+					key := RouteKey{Required: REGULAR, Direction: ""}
+					routeKeys = append(routeKeys, key)
+					routeFolders[key] = sectionFolder
 				}
-				for _, regularKey := range routes {
-					folder := folders[regularKey]
+				for _, rkey := range routeKeys {
+					folder := routeFolders[rkey]
 
-					for _, mode := range MODES {
+					for _, alternativeType := range ALTERNATIVE_TYPES {
 
-						type AlternativeMode int
-						const NORMAL AlternativeMode = 1
-						const HIKING_ALTERNATIVES AlternativeMode = 2
-						var ALTERNATIVES_MODES []AlternativeMode
-
-						if mode == HIKING {
-							ALTERNATIVES_MODES = []AlternativeMode{NORMAL}
-						} else {
-							ALTERNATIVES_MODES = []AlternativeMode{NORMAL, HIKING_ALTERNATIVES}
+						if alternativeType == HIKING_ALTERNATIVES {
+							rkey.Required = OPTIONAL
+							rkey.Alternatives = true
+							rkey.AlternativesIndex = 1
 						}
 
-						for _, altMode := range ALTERNATIVES_MODES {
+						var routes []*Route
+						route := &Route{
+							Section: section,
+							Key:     rkey,
+							Name:    "",
+							All:     []*Segment{},
+							Modes:   map[ModeType]*RouteModeData{},
+						}
+						routeAll := map[*Segment]bool{}
 
-							optionalKey := OptionalKey{}
-							regular := true
+						var modesInUse []ModeType
+						if alternativeType == HIKING_ALTERNATIVES {
+							modesInUse = []ModeType{RAFT}
+						} else {
+							modesInUse = []ModeType{HIKE, RAFT}
+						}
 
-							if altMode == HIKING_ALTERNATIVES {
-								optionalKey.Alternatives = true
-								optionalKey.Direction = regularKey.Direction
-								optionalKey.AlternativesIndex = 0
-								regularKey = RegularKey{}
-								regular = false
-							}
+						for _, mode := range modesInUse {
 
-							var routes []*Route
-							route := &Route{
-								Section:     section,
-								Hiking:      mode == HIKING,
-								Packrafting: mode == PACKRAFTING,
-								Regular:     regular,
-								RegularKey:  regularKey,
-								OptionalKey: optionalKey,
-								Name:        "",
-								Segments:    nil,
-							}
 							var prev *Segment
 							for _, placemark := range folder.Placemarks {
 								codes := map[string]bool{}
-								if altMode == HIKING_ALTERNATIVES {
+								if alternativeType == HIKING_ALTERNATIVES {
 									codes["RH"] = true
-								} else if mode == PACKRAFTING {
+								} else if mode == RAFT {
 									codes["RR"] = true
 									codes["RP"] = true
-								} else if mode == HIKING {
+								} else if mode == HIKE {
 									codes["RR"] = true
 									codes["RH"] = true
 								}
 
-								segment, err := getSegment(route, placemark, elevation, codes)
+								segment, err := getSegment(route, placemark, codes)
 								if err != nil {
 									return err
 								}
@@ -176,86 +167,70 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 									// check that segment adjoins prev.
 									adjoins := prev.Line.End().IsClose(segment.Line.Start(), DELTA)
 									if !adjoins {
-										if altMode != HIKING_ALTERNATIVES {
+										if alternativeType != HIKING_ALTERNATIVES {
 											return fmt.Errorf("segments %q and %q in %q are not joined", prev.Raw, segment.Raw, route.Debug())
 										}
-										if len(route.Segments) > 0 {
+										if len(route.All) > 0 {
 											routes = append(routes, route)
 										}
-										optionalKey = OptionalKey{
+										newKey := RouteKey{
+											Required:          OPTIONAL,
+											Direction:         route.Key.Direction,
 											Alternatives:      true,
-											Direction:         optionalKey.Direction,
-											AlternativesIndex: optionalKey.AlternativesIndex + 1,
+											AlternativesIndex: route.Key.AlternativesIndex + 1,
 										}
 										route = &Route{
-											Section:     section,
-											Hiking:      mode == HIKING,
-											Packrafting: mode == PACKRAFTING,
-											Regular:     regular,
-											RegularKey:  regularKey,
-											OptionalKey: optionalKey,
-											Name:        "",
-											Segments:    nil,
+											Section: section,
+											Key:     newKey,
+											Name:    "",
+											All:     []*Segment{},
+											Modes:   map[ModeType]*RouteModeData{},
 										}
+										routeAll = map[*Segment]bool{}
 									}
 								}
 								prev = segment
-								route.Segments = append(route.Segments, segment)
+								if route.Modes[mode] == nil {
+									route.Modes[mode] = &RouteModeData{}
+								}
+								if segment.Modes[mode] == nil {
+									segment.Modes[mode] = &SegmentModeData{}
+								}
+								route.Modes[mode].Segments = append(route.Modes[mode].Segments, segment)
+								if !routeAll[segment] {
+									route.All = append(route.All, segment)
+									routeAll[segment] = true
+								}
 							}
-							if len(route.Segments) == 0 {
+							if len(route.All) == 0 {
 								continue
 							}
-							routes = append(routes, route)
 
-							for _, route := range routes {
+						}
+						routes = append(routes, route)
 
-								route.Network = &Network{
-									Route: route,
-									Entry: route.Segments[0],
-								}
-								if altMode == HIKING_ALTERNATIVES {
-									if section.Packrafting == nil {
-										section.Packrafting = &Bundle{
-											Regular: map[RegularKey]*Route{},
-											Options: map[OptionalKey]*Route{},
-										}
+						for _, route := range routes {
+							for _, mode := range MODES {
+								if route.Modes[mode] != nil {
+									route.Modes[mode].Network = &Network{
+										Mode:          mode,
+										Route:         route,
+										RouteModeData: route.Modes[mode],
+										Entry:         route.Modes[mode].Segments[0],
 									}
-									if section.Packrafting.Options[route.OptionalKey] != nil {
-										fmt.Printf("%#v\n", route.OptionalKey)
-										return fmt.Errorf("duplicate route HA %q in %q", route.Raw, route.Section.Raw)
-									}
-									section.Packrafting.Options[route.OptionalKey] = route
-								} else if mode == PACKRAFTING {
-									if section.Packrafting == nil {
-										section.Packrafting = &Bundle{
-											Regular: map[RegularKey]*Route{},
-											Options: map[OptionalKey]*Route{},
-										}
-									}
-									if section.Packrafting.Regular[route.RegularKey] != nil {
-										return fmt.Errorf("duplicate route PR %q in %q", route.Raw, route.Section.Raw)
-									}
-									section.Packrafting.Regular[route.RegularKey] = route
-								} else if mode == HIKING {
-									if section.Hiking == nil {
-										section.Hiking = &Bundle{
-											Regular: map[RegularKey]*Route{},
-											Options: map[OptionalKey]*Route{},
-										}
-									}
-									if section.Hiking.Regular[route.RegularKey] != nil {
-										return fmt.Errorf("duplicate route HR %q in %q", route.Raw, route.Section.Raw)
-									}
-									section.Hiking.Regular[route.RegularKey] = route
 								}
 							}
-
+							if section.Routes[route.Key] != nil {
+								return fmt.Errorf("duplicate regular route %q in %q", route.Debug(), route.Section.Raw)
+							}
+							section.RouteKeys = append(section.RouteKeys, route.Key)
+							section.Routes[route.Key] = route
 						}
 					}
 				}
 			} else {
 				for _, optionVariantsFolder := range sectionFolder.Folders {
-					routes := map[OptionalKey]bool{}
+					routes := map[RouteKey]bool{}
 					var optionNumber int
 					switch {
 					case optionVariantsFolder.Name == "Variants":
@@ -280,82 +255,106 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 						networkCode := matches[3]
 						routeName := matches[5]
 
-						optionalKey := OptionalKey{
-							Option:  optionNumber,
-							Variant: variantCode,
-							Network: networkCode,
+						rkey := RouteKey{
+							Required: OPTIONAL,
+							Option:   optionNumber,
+							Variant:  variantCode,
+							Network:  networkCode,
 						}
-						if routes[optionalKey] {
+						if routes[rkey] {
 							return fmt.Errorf("duplicate variant %q in %q in %q in %q", variantCode, routeFolder.Name, optionVariantsFolder.Name, section.Raw)
 						}
-						routes[optionalKey] = true
+						routes[rkey] = true
+
+						route := &Route{
+							Section: section,
+							Key:     rkey,
+							Name:    routeName,
+							All:     []*Segment{},
+							Modes:   map[ModeType]*RouteModeData{},
+						}
+						routeAll := map[*Segment]bool{}
 
 						for _, mode := range MODES {
-							route := &Route{
-								Section:     section,
-								Hiking:      mode == HIKING,
-								Packrafting: mode == PACKRAFTING,
-								Regular:     false,
-								RegularKey:  RegularKey{},
-								OptionalKey: optionalKey,
-								Name:        routeName,
-								Segments:    nil,
-							}
 							for _, segmentPlacemark := range routeFolder.Placemarks {
 								codes := map[string]bool{}
 								switch mode {
-								case HIKING:
+								case HIKE:
 									codes["OH"] = true
-								case PACKRAFTING:
+								case RAFT:
 									codes["OH"] = true
 									codes["OP"] = true
 								}
-								segment, err := getSegment(route, segmentPlacemark, elevation, codes)
+								segment, err := getSegment(route, segmentPlacemark, codes)
 								if err != nil {
 									return err
 								}
 								if segment == nil {
 									continue
 								}
-								route.Segments = append(route.Segments, segment)
-							}
-							if len(route.Segments) == 0 {
-								continue
-							}
-							route.Network = &Network{
-								Route: route,
-								Entry: route.Segments[0],
-							}
-							if mode == PACKRAFTING {
-								if section.Packrafting == nil {
-									section.Packrafting = &Bundle{
-										Regular: map[RegularKey]*Route{},
-										Options: map[OptionalKey]*Route{},
-									}
+								if route.Modes[mode] == nil {
+									route.Modes[mode] = &RouteModeData{}
 								}
-								if section.Packrafting.Options[optionalKey] != nil {
-									return fmt.Errorf("duplicate route PO %q in %q", route.Raw, route.Section.Raw)
+								if segment.Modes[mode] == nil {
+									segment.Modes[mode] = &SegmentModeData{}
 								}
-								section.Packrafting.Options[optionalKey] = route
-							} else if mode == HIKING {
-								if section.Hiking == nil {
-									section.Hiking = &Bundle{
-										Regular: map[RegularKey]*Route{},
-										Options: map[OptionalKey]*Route{},
-									}
+								route.Modes[mode].Segments = append(route.Modes[mode].Segments, segment)
+								if !routeAll[segment] {
+									route.All = append(route.All, segment)
+									routeAll[segment] = true
 								}
-								if section.Hiking.Options[optionalKey] != nil {
-									return fmt.Errorf("duplicate route HO %q in %q", route.Raw, route.Section.Raw)
-								}
-								section.Hiking.Options[optionalKey] = route
 							}
 						}
+						if len(route.All) == 0 {
+							continue
+						}
+						for _, mode := range MODES {
+							if route.Modes[mode] != nil {
+								route.Modes[mode].Network = &Network{
+									Mode:          mode,
+									Route:         route,
+									RouteModeData: route.Modes[mode],
+									Entry:         route.Modes[mode].Segments[0],
+								}
+							}
+						}
+						if section.Routes[route.Key] != nil {
+							return fmt.Errorf("duplicate optional route %q in %q", route.Debug(), route.Section.Raw)
+						}
+						section.RouteKeys = append(section.RouteKeys, route.Key)
+						section.Routes[route.Key] = route
 					}
 				}
 			}
 		}
 	}
 
+	if elevation {
+		logln("looking up track elevations")
+		for _, sectionKey := range d.Keys {
+			section := d.Sections[sectionKey]
+			for _, routeKey := range section.RouteKeys {
+				route := section.Routes[routeKey]
+				for _, segment := range route.All {
+					for i := range segment.Line {
+						pos := geo.Pos{Lat: segment.Line[i].Lat, Lon: segment.Line[i].Lon}
+						ele, found := elevationCache[pos]
+						if !found {
+							var err error
+							ele, err = SrtmClient.GetElevation(http.DefaultClient, pos.Lat, pos.Lon)
+							if err != nil {
+								return fmt.Errorf("looking up elevation for %q: %w", segment.Raw, err)
+							}
+							elevationCache[pos] = ele
+						}
+						segment.Line[i].Ele = ele
+					}
+				}
+			}
+		}
+	}
+
+	logln("scanning waypoints")
 	for _, folder := range pointsFolder.Folders {
 		switch folder.Name {
 		case "Section Start and End Points":
@@ -446,6 +445,7 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 	}
 
 	if elevation {
+		logln("looking up waypoint elevations")
 		waypointElevations := func(waypoints []Waypoint) error {
 			for i, w := range waypoints {
 				elevation, err := SrtmClient.GetElevation(http.DefaultClient, w.Lat, w.Lon)
@@ -456,21 +456,17 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 			}
 			return nil
 		}
-		logln("Getting elevations for resupplies waypoints")
 		if err := waypointElevations(d.Resupplies); err != nil {
 			return err
 		}
-		logln("Getting elevations for important waypoints")
 		if err := waypointElevations(d.Important); err != nil {
 			return err
 		}
 		for _, section := range d.Sections {
-			logf("Getting elevations for GPT%s\n", section.Key.Code())
 			if err := waypointElevations(section.Waypoints); err != nil {
 				return err
 			}
 		}
-		logln("Getting elevations for section start/end waypoints")
 		for i, terminator := range d.Terminators {
 			elevation, err := SrtmClient.GetElevation(http.DefaultClient, terminator.Lat, terminator.Lon)
 			if err != nil {
@@ -483,7 +479,17 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 	return nil
 }
 
-func getSegment(route *Route, placemark *kml.Placemark, elevation bool, codes map[string]bool) (*Segment, error) {
+var segmentCache = map[*kml.Placemark]*Segment{}
+
+func getSegment(route *Route, placemark *kml.Placemark, codes map[string]bool) (*Segment, error) {
+
+	if segment, ok := segmentCache[placemark]; ok {
+		if !codes[segment.Code] {
+			return nil, nil
+		}
+		return segment, nil
+	}
+
 	matches := segmentPlacemarkRegex.FindStringSubmatch(placemark.Name)
 
 	if len(matches) == 0 {
@@ -501,37 +507,20 @@ func getSegment(route *Route, placemark *kml.Placemark, elevation bool, codes ma
 	segment := &Segment{
 		Route:        route,
 		Raw:          placemark.Name,
+		Legacy:       placemark.Legacy,
 		Experimental: matches[2] == "EXP",
 		Code:         matches[3],
 		Terrains:     strings.Split(matches[4], "&"),
 		Verification: matches[7],
 		Directional:  matches[8],
-		From:         0, // calculated later
 		Length:       placemark.GetLineString().Line().Length(),
 		Name:         matches[10],
 		Line:         placemark.GetLineString().Line(),
-		StartPoint:   nil,
-		EndPoint:     nil,
-		MidPoints:    nil,
+		Modes:        map[ModeType]*SegmentModeData{},
 	}
 
-	if elevation {
-		logf("Getting elevations for %s\n", segment.String())
-		for i := range segment.Line {
-			// SrtmClient.GetElevation is slow even when cached, so we make our own cache.
-			pos := geo.Pos{Lat: segment.Line[i].Lat, Lon: segment.Line[i].Lon}
-			ele, found := elevationCache[pos]
-			if !found {
-				var err error
-				ele, err = SrtmClient.GetElevation(http.DefaultClient, pos.Lat, pos.Lon)
-				if err != nil {
-					return nil, fmt.Errorf("looking up elevation for %q: %w", segment.Raw, err)
-				}
-				elevationCache[pos] = ele
-			}
-			segment.Line[i].Ele = ele
-		}
-	}
+	segmentCache[placemark] = segment
+
 	return segment, nil
 }
 

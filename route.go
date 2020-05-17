@@ -5,16 +5,77 @@ import (
 	"strings"
 )
 
-// Route is a continuous path composed of several adjoining segments (maybe from different tracks)
+//for _, sectionKey := range d.Keys {
+//section := d.Sections[sectionKey]
+//for _, routeKey := range section.RouteKeys {
+//route := section.Routes[routeKey]
+//}
+//}
+
+// Route is a continuous path composed of several adjoining segments
 type Route struct {
-	*Section
-	Hiking, Packrafting bool        // is this part of the packrafting or hiking route? (for both regular and optional routes)
-	Regular             bool        // is this the regular route? If Regular == true, Key == OptionalKey{}
-	RegularKey          RegularKey  // key for regular routes.
-	OptionalKey         OptionalKey // key for optional routes.
-	Name                string      // track name for optional tracks
-	Segments            []*Segment
-	Network             *Network
+	Section *Section
+	Key     RouteKey
+	Name    string // track name for optional tracks
+	All     []*Segment
+	Modes   map[ModeType]*RouteModeData
+}
+
+type RouteModeData struct {
+	Segments []*Segment
+	Network  *Network
+}
+
+type RouteKey struct {
+	Required          RequiredType
+	Direction         string // North = "N", South = "S", All = "" (regular and optional hiking alternatives)
+	Option            int    // Option number. If true => Alternatives == false.
+	Variant           string // Variant code (one or two upper case letters). If true => Alternatives == false.
+	Alternatives      bool   // Hiking alternatives for packrafting routes. If true => Option == 0 && Variant == "".
+	Network           string // Network code (one lower case letter) - MIGRATE THIS OUT
+	AlternativesIndex int    // when hiking alternatives have several non-consecutive stretches, a separate route is created for each.
+}
+
+func (r *Route) FolderName() string {
+	var name string
+	if r.Key.Option > 0 {
+		name = fmt.Sprintf("%02d%s%s", r.Key.Option, r.Key.Variant, r.Key.Network)
+	} else {
+		name = fmt.Sprintf("%s%s", r.Key.Variant, r.Key.Network)
+	}
+
+	if r.Name != "" {
+		name += fmt.Sprintf(" (%s)", r.Name)
+	}
+
+	return name
+}
+
+func (k RouteKey) Debug() string {
+	if k.Required == REGULAR {
+		switch k.Direction {
+		case "S":
+			return "southbound"
+		case "N":
+			return "northbound"
+		default:
+			return "regular"
+		}
+	} else {
+		if k.Alternatives {
+			var direction string
+			if k.Direction == "S" {
+				direction = "southbound "
+			} else if k.Direction == "N" {
+				direction = "northbound "
+			}
+			return fmt.Sprintf("%shiking alternatives %d", direction, k.AlternativesIndex)
+		}
+		if k.Option > 0 {
+			return fmt.Sprintf("option %d%s", k.Option, k.Variant)
+		}
+		return fmt.Sprintf("variant %s", k.Variant)
+	}
 }
 
 //func (r *Route) HasIdenticalNetworks(r1 *Route) bool {
@@ -42,19 +103,19 @@ type Route struct {
 // j?: total number of networks
 func (r *Route) String() string {
 	var key string
-	if !r.Regular {
+	if r.Key.Required == OPTIONAL {
 		var alternatives string
-		if r.OptionalKey.Alternatives {
+		if r.Key.Alternatives {
 			alternatives = "HA"
 		}
 		var option string
-		if r.OptionalKey.Option > 0 {
-			option = fmt.Sprintf("%02d", r.OptionalKey.Option)
+		if r.Key.Option > 0 {
+			option = fmt.Sprintf("%02d", r.Key.Option)
 		}
-		key = fmt.Sprintf("-%s%s%s%s", alternatives, r.OptionalKey.Direction, option, r.OptionalKey.Variant)
+		key = fmt.Sprintf("-%s%s%s%s", alternatives, r.Key.Direction, option, r.Key.Variant)
 	} else {
-		if r.RegularKey.Direction != "" {
-			key = r.RegularKey.Direction
+		if r.Key.Direction != "" {
+			key = r.Key.Direction
 		}
 	}
 	return fmt.Sprintf(
@@ -67,15 +128,12 @@ func (r *Route) String() string {
 func (r *Route) Debug() string {
 
 	var dir string
-	if r.RegularKey.Direction == "N" {
+	if r.Key.Direction == "N" {
 		dir = " northbound"
-	} else if r.RegularKey.Direction == "S" {
+	} else if r.Key.Direction == "S" {
 		dir = " southbound"
-	}
-
-	typ := "hiking"
-	if r.Packrafting {
-		typ = "packrafting"
+	} else {
+		dir = " regular"
 	}
 
 	var name string
@@ -83,282 +141,277 @@ func (r *Route) Debug() string {
 		name = fmt.Sprintf(" (%s)", r.Name)
 	}
 
-	if r.Regular {
-		return fmt.Sprintf("GPT%s%s %s%s", r.Section.Key.Code(), dir, typ, name)
+	if r.Key.Required == REGULAR {
+		return fmt.Sprintf("GPT%s%s%s", r.Section.Key.Code(), dir, name)
 	}
-	if r.OptionalKey.Alternatives {
-		return strings.TrimSpace(fmt.Sprintf("GPT%s%s %s - hiking alternatives", r.Section.Key.Code(), dir, typ))
+	if r.Key.Alternatives {
+		return strings.TrimSpace(fmt.Sprintf("GPT%s%s - hiking alternatives %d", r.Section.Key.Code(), dir, r.Key.AlternativesIndex))
 	}
-	if r.OptionalKey.Option == 0 {
-		return strings.TrimSpace(fmt.Sprintf("GPT%s%s %s - variant %s%s", r.Section.Key.Code(), dir, typ, r.OptionalKey.Variant, name))
+	if r.Key.Option == 0 {
+		return strings.TrimSpace(fmt.Sprintf("GPT%s%s - variant %s%s", r.Section.Key.Code(), dir, r.Key.Variant, name))
 	}
-	return strings.TrimSpace(fmt.Sprintf("GPT%s%s %s - option %d%s%s", r.Section.Key.Code(), dir, typ, r.OptionalKey.Option, r.OptionalKey.Variant, name))
+	return strings.TrimSpace(fmt.Sprintf("GPT%s%s - option %d%s%s", r.Section.Key.Code(), dir, r.Key.Option, r.Key.Variant, name))
 
 }
 
-func (r *Route) BuildNetwork() error {
+func (r *Route) BuildNetworks() error {
 
-	all := map[*Point]bool{}
-	var allOrdered []*Point
-	var ends []*Point
-	for _, segment := range r.Segments {
+	for _, mode := range MODES {
 
-		start := &Point{Segment: segment, Start: true, Index: 0, Pos: segment.Line[0]}
-		ends = append(ends, start)
-		if !all[start] {
-			all[start] = true
-			allOrdered = append(allOrdered, start)
+		if r.Modes[mode] == nil {
+			continue
 		}
-		segment.StartPoint = start
+		rMode := r.Modes[mode]
 
-		finish := &Point{Segment: segment, End: true, Index: len(segment.Line) - 1, Pos: segment.Line[len(segment.Line)-1]}
-		ends = append(ends, finish)
-		if !all[finish] {
-			all[finish] = true
-			allOrdered = append(allOrdered, finish)
+		all := map[*Point]bool{}
+		var allOrdered []*Point
+		var ends []*Point
+		for _, segment := range rMode.Segments {
+
+			start := &Point{Segment: segment, Start: true, Index: 0, Pos: segment.Line[0]}
+			ends = append(ends, start)
+			if !all[start] {
+				all[start] = true
+				allOrdered = append(allOrdered, start)
+			}
+			segment.Modes[mode].StartPoint = start
+
+			finish := &Point{Segment: segment, End: true, Index: len(segment.Line) - 1, Pos: segment.Line[len(segment.Line)-1]}
+			ends = append(ends, finish)
+			if !all[finish] {
+				all[finish] = true
+				allOrdered = append(allOrdered, finish)
+			}
+			segment.Modes[mode].EndPoint = finish
+
 		}
-		segment.EndPoint = finish
+		nearby := map[*Point][]*Point{}
 
-	}
-	nearby := map[*Point][]*Point{}
+		if r.Key.Required == REGULAR {
+			// forming network for regluar routes is trivial
 
-	if r.Regular {
-		// forming network for regluar routes is trivial
-
-		for i, segment := range r.Segments {
-			if i == 0 {
-				r.Network.Nodes = append(r.Network.Nodes, &Node{
-					Network: r.Network,
-					Points:  []*Point{segment.StartPoint},
-				})
-				continue
-			}
-			prev := r.Segments[i-1]
-			r.Network.Nodes = append(r.Network.Nodes, &Node{
-				Network: r.Network,
-				Points:  []*Point{prev.EndPoint, segment.StartPoint},
-			})
-			if i == len(r.Segments)-1 {
-				r.Network.Nodes = append(r.Network.Nodes, &Node{
-					Network: r.Network,
-					Points:  []*Point{segment.EndPoint},
-				})
-			}
-		}
-
-	} else {
-		for _, end := range ends {
-			if !all[end] {
-				all[end] = true
-				allOrdered = append(allOrdered, end)
-			}
-			for _, neighbour := range ends {
-				if end == neighbour {
-					continue
-				}
-				if end.Segment == neighbour.Segment {
-					continue
-				}
-				if !end.Pos.IsClose(neighbour.Pos, DELTA) {
-					continue
-				}
-				nearby[end] = append(nearby[end], neighbour)
-				nearby[neighbour] = append(nearby[neighbour], end)
-			}
-		Outer:
-			for _, segment := range r.Segments {
-				if end.Segment == segment {
-					continue
-				}
-				for _, point := range nearby[end] {
-					if point.Segment == segment {
-						continue Outer
+			for i, segment := range rMode.Segments {
+				segmentMode := segment.Modes[mode]
+				if i == 0 {
+					node := &Node{
+						Network: rMode.Network,
+						Points:  []*Point{segmentMode.StartPoint},
 					}
+					segmentMode.StartPoint.Node = node
+					rMode.Network.Nodes = append(rMode.Network.Nodes, node)
 				}
-				found, index := segment.Line.IsClose(end.Pos, DELTA)
-				if !found {
-					continue
-				}
-				mid := &Point{Segment: segment, Index: index, Pos: segment.Line[index]}
-				nearby[end] = append(nearby[end], mid)
-				nearby[mid] = append(nearby[mid], end)
-				if !all[mid] {
-					all[mid] = true
-					allOrdered = append(allOrdered, mid)
-				}
-				segment.MidPoints = append(segment.MidPoints, mid)
-			}
-		}
+				if i > 0 {
+					prev := rMode.Segments[i-1]
+					prevMode := prev.Modes[mode]
 
-		var nodes []*Node
-		done := map[*Point]bool{}
-		for len(all) > len(done) {
-			node := &Node{}
-			var addPointAndAllNearby func(*Point)
-			addPointAndAllNearby = func(p *Point) {
-				if done[p] {
-					return
+					// ensure segments all join in regular routes
+					if !prevMode.EndPoint.Pos.IsClose(segmentMode.StartPoint.Pos, DELTA) {
+						return fmt.Errorf("%q and %q are %dm apart", prev.Raw, segment.Raw, prevMode.EndPoint.Pos.Distance(segmentMode.StartPoint.Pos)*1000)
+					}
+
+					node := &Node{
+						Network: rMode.Network,
+						Points:  []*Point{prevMode.EndPoint, segmentMode.StartPoint},
+					}
+					prevMode.EndPoint.Node = node
+					segmentMode.StartPoint.Node = node
+					rMode.Network.Nodes = append(rMode.Network.Nodes, node)
 				}
-				done[p] = true
-				node.Points = append(node.Points, p)
-				for _, point := range nearby[p] {
-					if p == point || done[point] {
+				if i == len(rMode.Segments)-1 {
+					node := &Node{
+						Network: rMode.Network,
+						Points:  []*Point{segmentMode.EndPoint},
+					}
+					segmentMode.EndPoint.Node = node
+					rMode.Network.Nodes = append(rMode.Network.Nodes, node)
+				}
+			}
+
+		} else {
+			for _, end := range ends {
+				if !all[end] {
+					all[end] = true
+					allOrdered = append(allOrdered, end)
+				}
+				for _, neighbour := range ends {
+					if end == neighbour {
 						continue
 					}
-					addPointAndAllNearby(point)
+					if end.Segment == neighbour.Segment {
+						continue
+					}
+					if !end.Pos.IsClose(neighbour.Pos, DELTA) {
+						continue
+					}
+					nearby[end] = append(nearby[end], neighbour)
+					nearby[neighbour] = append(nearby[neighbour], end)
+				}
+			Outer:
+				for _, segment := range rMode.Segments {
+					segmentMode := segment.Modes[mode]
+					if end.Segment == segment {
+						continue
+					}
+					for _, point := range nearby[end] {
+						if point.Segment == segment {
+							continue Outer
+						}
+					}
+					found, index := segment.Line.IsClose(end.Pos, DELTA)
+					if !found {
+						continue
+					}
+					mid := &Point{Segment: segment, Index: index, Pos: segment.Line[index]}
+					nearby[end] = append(nearby[end], mid)
+					nearby[mid] = append(nearby[mid], end)
+					if !all[mid] {
+						all[mid] = true
+						allOrdered = append(allOrdered, mid)
+					}
+					segmentMode.MidPoints = append(segmentMode.MidPoints, mid)
 				}
 			}
-			for _, point := range allOrdered {
-				// find any unused point and add it to the node
-				if !done[point] {
-					addPointAndAllNearby(point)
+
+			var nodes []*Node
+			done := map[*Point]bool{}
+			for len(all) > len(done) {
+				node := &Node{}
+				var addPointAndAllNearby func(*Point)
+				addPointAndAllNearby = func(p *Point) {
+					if done[p] {
+						return
+					}
+					done[p] = true
+					node.Points = append(node.Points, p)
+					for _, point := range nearby[p] {
+						if p == point || done[point] {
+							continue
+						}
+						addPointAndAllNearby(point)
+					}
+				}
+				for _, point := range allOrdered {
+					// find any unused point and add it to the node
+					if !done[point] {
+						addPointAndAllNearby(point)
+						break
+					}
+				}
+
+				needToSeparate := func(node *Node) (bool, [][]*Point) {
+					// if node has more than 1 point from the same segment, split and assign the other points based on distance
+					segments := map[*Segment][]*Point{}
+					var segmentsOrdered []*Segment
+					for _, point := range node.Points {
+						if segments[point.Segment] == nil {
+							segmentsOrdered = append(segmentsOrdered, point.Segment)
+						}
+						segments[point.Segment] = append(segments[point.Segment], point)
+					}
+					for _, segment := range segmentsOrdered {
+						points := segments[segment]
+						if len(points) > 1 {
+							var separatedPointGroups [][]*Point
+							for _, p := range points {
+								separatedPointGroups = append(separatedPointGroups, []*Point{p})
+							}
+							return true, separatedPointGroups
+						}
+					}
+					return false, nil
+				}
+				var addOrSplit func(node *Node)
+				addOrSplit = func(node *Node) {
+					if found, groups := needToSeparate(node); !found {
+						nodes = append(nodes, node)
+					} else {
+						var newNodes []*Node
+						for _, group := range groups {
+							newNodes = append(newNodes, &Node{Points: group})
+						}
+					NodePoints:
+						for _, point := range node.Points {
+							for _, group := range groups {
+								for _, p := range group {
+									if p == point {
+										// only consider points that aren't included in the separated point groups
+										continue NodePoints
+									}
+								}
+							}
+							var closestNode *Node
+							var closestDist float64
+							for _, newNode := range newNodes {
+								for _, p := range newNode.Points {
+									dist := p.Pos.Distance(point.Pos)
+									if closestNode == nil || dist < closestDist {
+										closestNode = newNode
+										closestDist = dist
+									}
+								}
+							}
+							if closestNode == nil {
+								panic("coulnd't find closest node")
+							}
+							closestNode.Points = append(closestNode.Points, point)
+						}
+						for _, newNode := range newNodes {
+							addOrSplit(newNode)
+						}
+					}
+				}
+				addOrSplit(node)
+			}
+
+			const PRINT_NODES = false
+
+			if PRINT_NODES {
+				debugf("\n\n%s\n", r.String())
+			}
+			for i, node := range nodes {
+				if PRINT_NODES {
+					debugf("%d) %s\n", i, node.Debug())
+				}
+				for _, point := range node.Points {
+					point.Node = node
+				}
+			}
+
+			doneSegments := map[*Segment]bool{}
+			// find a segment that hasn't been used
+			var segment *Segment
+			for _, s := range rMode.Segments {
+				if !doneSegments[s] {
+					segment = s
 					break
 				}
 			}
-
-			// if a node joins two forced separate segments, split them
-			// TODO: WTF? This is shit.
-			//separationRules := [][]map[string]bool{
-			//	{
-			//		{"EXP-OP-TL-V@92P-A-#001 end": true},
-			//		{"EXP-OP-TL-V@92P-A-#002 end": true},
-			//		{"EXP-OP-TL-V@92P-A-#003 end": true},
-			//		{"EXP-OP-TL-V@92P-A-#003 #6": true},
-			//	},
-			//}
-
-			needToSeparate := func(node *Node) (bool, [][]*Point) {
-				//for _, rule := range separationRules {
-				//	var separatedPointGroups [][]*Point
-				//	for _, separationGroup := range rule {
-				//		var separatedPoints []*Point
-				//		for _, point := range node.Points {
-				//			if separationGroup[point.Segment.Raw] || separationGroup[point.Debug()] {
-				//				separatedPoints = append(separatedPoints, point)
-				//			}
-				//		}
-				//		if len(separatedPoints) > 0 {
-				//			separatedPointGroups = append(separatedPointGroups, separatedPoints)
-				//		}
-				//	}
-				//	if len(separatedPointGroups) > 1 {
-				//		return true, separatedPointGroups
-				//	}
-				//}
-
-				// if node has more than 1 point from the same segment, split and assign the other points based on distance
-				segments := map[*Segment][]*Point{}
-				var segmentsOrdered []*Segment
-				for _, point := range node.Points {
-					if segments[point.Segment] == nil {
-						segmentsOrdered = append(segmentsOrdered, point.Segment)
-					}
-					segments[point.Segment] = append(segments[point.Segment], point)
+			networkNodes := map[*Node]bool{} // log of the nodes we've added to this network, so we don't add them twice
+			var find func(*Segment)
+			find = func(segment *Segment) {
+				if doneSegments[segment] {
+					return
 				}
-				for _, segment := range segmentsOrdered {
-					points := segments[segment]
-					if len(points) > 1 {
-						var separatedPointGroups [][]*Point
-						for _, p := range points {
-							separatedPointGroups = append(separatedPointGroups, []*Point{p})
-						}
-						return true, separatedPointGroups
+				doneSegments[segment] = true
+				for _, node := range nodes {
+					if !node.ContainsSegment(segment) {
+						continue
 					}
-				}
-				return false, nil
-			}
-			var addOrSplit func(node *Node)
-			addOrSplit = func(node *Node) {
-				if found, groups := needToSeparate(node); !found {
-					nodes = append(nodes, node)
-				} else {
-					var newNodes []*Node
-					for _, group := range groups {
-						newNodes = append(newNodes, &Node{Points: group})
+					if !networkNodes[node] {
+						node.Network = rMode.Network
+						rMode.Network.Nodes = append(rMode.Network.Nodes, node)
+						networkNodes[node] = true
 					}
-				NodePoints:
 					for _, point := range node.Points {
-						for _, group := range groups {
-							for _, p := range group {
-								if p == point {
-									// only consider points that aren't included in the separated point groups
-									continue NodePoints
-								}
-							}
-						}
-						var closestNode *Node
-						var closestDist float64
-						for _, newNode := range newNodes {
-							for _, p := range newNode.Points {
-								dist := p.Pos.Distance(point.Pos)
-								if closestNode == nil || dist < closestDist {
-									closestNode = newNode
-									closestDist = dist
-								}
-							}
-						}
-						if closestNode == nil {
-							panic("coulnd't find closest node")
-						}
-						closestNode.Points = append(closestNode.Points, point)
-					}
-					for _, newNode := range newNodes {
-						addOrSplit(newNode)
+						find(point.Segment)
 					}
 				}
 			}
-			addOrSplit(node)
-		}
-
-		const PRINT_NODES = false
-
-		if PRINT_NODES {
-			debugf("\n\n%s\n", r.String())
-		}
-		for i, node := range nodes {
-			if PRINT_NODES {
-				debugf("%d) %s\n", i, node.Debug())
+			find(segment)
+			if len(rMode.Segments) != len(doneSegments) {
+				return fmt.Errorf("route %q in %q contains more than one network", r.Debug(), r.Section.Raw)
 			}
-			for _, point := range node.Points {
-				point.Node = node
-			}
-		}
-
-		doneSegments := map[*Segment]bool{}
-		// find a segment that hasn't been used
-		var segment *Segment
-		for _, s := range r.Segments {
-			if !doneSegments[s] {
-				segment = s
-				break
-			}
-		}
-		networkNodes := map[*Node]bool{} // log of the nodes we've added to this network, so we don't add them twice
-		var find func(*Segment)
-		find = func(segment *Segment) {
-			if doneSegments[segment] {
-				return
-			}
-			doneSegments[segment] = true
-			for _, node := range nodes {
-				if !node.ContainsSegment(segment) {
-					continue
-				}
-				if !networkNodes[node] {
-					node.Network = r.Network
-					r.Network.Nodes = append(r.Network.Nodes, node)
-					networkNodes[node] = true
-				}
-				for _, point := range node.Points {
-					find(point.Segment)
-				}
-			}
-		}
-		find(segment)
-		if len(r.Segments) != len(doneSegments) {
-			return fmt.Errorf("route %q in %q contains more than one network", r.Raw, r.Section.Raw)
 		}
 	}
-
 	return nil
 }

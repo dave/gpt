@@ -58,7 +58,6 @@ func (s *Section) Scrape(cachedir string) error {
 	cachefpath := filepath.Join(cachedir, fmt.Sprintf("GPT%s.html", s.Key.Code()))
 	f, err := os.Open(cachefpath)
 	if err == nil {
-		logf("Web scrape data for GPT%s found in cache file %q\n", s.Key.Code(), cachefpath)
 		reader = f
 		defer f.Close()
 	} else {
@@ -189,17 +188,13 @@ func (s *Section) Scrape(cachedir string) error {
 		}
 	})
 
-	if s.Hiking != nil {
-		s.Hiking.Scraped += fmt.Sprintf(HEADING_SYMBOL+" Full information\n\nThe following information may be incomplete and out of date. Be sure to check the up to date source:\n\n%s\n\n", url)
-		s.Hiking.Scraped += summaryHiking
-		s.Hiking.Scraped += description
-	}
+	s.Scraped[HIKE] += fmt.Sprintf(HEADING_SYMBOL+" Full information\n\nThe following information may be incomplete and out of date. Be sure to check the up to date source:\n\n%s\n\n", url)
+	s.Scraped[HIKE] += summaryHiking
+	s.Scraped[HIKE] += description
 
-	if s.Packrafting != nil {
-		s.Packrafting.Scraped += fmt.Sprintf(HEADING_SYMBOL+" Full information\n\nThe following information may be incomplete and out of date. Be sure to check the up to date source:\n\n%s\n\n", url)
-		s.Packrafting.Scraped += summaryPackrafting
-		s.Packrafting.Scraped += description
-	}
+	s.Scraped[RAFT] += fmt.Sprintf(HEADING_SYMBOL+" Full information\n\nThe following information may be incomplete and out of date. Be sure to check the up to date source:\n\n%s\n\n", url)
+	s.Scraped[RAFT] += summaryPackrafting
+	s.Scraped[RAFT] += description
 
 	return nil
 }
