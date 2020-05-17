@@ -562,7 +562,3 @@ func getSegment(route *Route, placemark *kml.Placemark, codes map[string]bool) (
 var sectionFolderRegex = regexp.MustCompile(`^GPT([0-9]{2})([HP])? \((.*)\)$`)
 var segmentPlacemarkRegex = regexp.MustCompile(`^((EXP)-)?(RH|RP|RR|OH|OP)-(((BB|CC|MR|PR|TL|FJ|LK|RI|FY)&?)+)-?([VAI])?([12])? {.*} \[.*] ?(\((.*)\))?$`)
 var routeFolderRegex = regexp.MustCompile(`^([0-9]{2})?([A-Z]{1,2})?([a-z])? ?(\((.*)\))?$`)
-
-//var regularTerminatorName = regexp.MustCompile(`^([0-9/GTHP]+) (.*)?\((.*)\)$`)
-//var optionsTerminatorName = regexp.MustCompile(`^([0-9/GTHP]+)(-([A-Z]))? \((.*)\)$`)
-//var waypointSectionFolderName = regexp.MustCompile(`^([0-9/GTHP]+)-.*$`)

@@ -100,7 +100,7 @@ func (s *Section) Scrape(cachedir string) error {
 		var summary []*html.Node
 		title := strings.TrimSpace(getText(selection))
 		switch title {
-		case "Elevation Profile", "Satellite Image Map", "Summary Table", "Alerts and Logs of Past Seasons", "Older information for review", "Image Gallery":
+		case "Elevation Profile", "Satellite Image Map", "Summary Table", "Alerts and Logs of Past Seasons", "Older information for review", "Image Gallery", "Images":
 			var ignoredCount int
 			switch selection.Parent().Nodes[0].Data {
 			case "h2":
@@ -188,11 +188,11 @@ func (s *Section) Scrape(cachedir string) error {
 		}
 	})
 
-	s.Scraped[HIKE] += fmt.Sprintf(HEADING_SYMBOL+" Full information\n\nThe following information may be incomplete and out of date. Be sure to check the up to date source:\n\n%s\n\n", url)
+	s.Scraped[HIKE] += fmt.Sprintf("\n%s Full information\n\nThe following information may be incomplete and out of date. Be sure to check the up to date source:\n\n%s\n\n", HEADING_SYMBOL, url)
 	s.Scraped[HIKE] += summaryHiking
 	s.Scraped[HIKE] += description
 
-	s.Scraped[RAFT] += fmt.Sprintf(HEADING_SYMBOL+" Full information\n\nThe following information may be incomplete and out of date. Be sure to check the up to date source:\n\n%s\n\n", url)
+	s.Scraped[RAFT] += fmt.Sprintf("\n%s Full information\n\nThe following information may be incomplete and out of date. Be sure to check the up to date source:\n\n%s\n\n", HEADING_SYMBOL, url)
 	s.Scraped[RAFT] += summaryPackrafting
 	s.Scraped[RAFT] += description
 
