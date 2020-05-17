@@ -8,11 +8,11 @@ import (
 )
 
 type Data struct {
-	Keys        []SectionKey
-	Sections    map[SectionKey]*Section
-	Terminators []Terminator // Waypoints marking the start/end of sections
-	Resupplies  []Waypoint
-	Important   []Waypoint
+	Keys       []SectionKey
+	Sections   map[SectionKey]*Section
+	Resupplies []Waypoint
+	Geographic []Waypoint
+	Important  []Waypoint
 }
 
 //func (d *Data) ForRoutePairs(f func(packrafting, hiking *Route) error) error {

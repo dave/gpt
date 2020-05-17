@@ -21,10 +21,6 @@ func (s Section) FolderName() string {
 	return fmt.Sprintf("GPT%s (%s)", s.Key.Code(), s.Name)
 }
 
-func (s Section) String() string {
-	return fmt.Sprintf("GPT%s-%s", s.Key.Code(), s.Name)
-}
-
 type SectionKey struct {
 	Number int
 	Suffix string

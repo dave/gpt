@@ -236,9 +236,22 @@ func (d *Data) SaveMaster(dpath string, updateLegacy bool) error {
 	//	return of.Folders[i].Name < of.Folders[j].Name
 	//})
 
+	startFolder, resupplyFolder, geographicFolder, importantFolder, waypointsFolder := d.getWaypointFolders()
+
+	pointsFolder := &kml.Folder{
+		Name: "Points",
+		Folders: []*kml.Folder{
+			importantFolder,
+			waypointsFolder,
+			startFolder,
+			resupplyFolder,
+			geographicFolder,
+		},
+	}
+
 	doc := kml.Document{
 		Name:    "GPT Master.kmz",
-		Folders: []*kml.Folder{tracksFolder},
+		Folders: []*kml.Folder{tracksFolder, pointsFolder},
 	}
 	addSegmentStyles(&doc)
 
@@ -262,6 +275,103 @@ func (d *Data) SaveMaster(dpath string, updateLegacy bool) error {
 	return nil
 }
 
+func (d *Data) getWaypointFolders() (startFolder, resupplyFolder, geographicFolder, importantFolder, waypointsFolder *kml.Folder) {
+
+	collect := func(waypoints []Waypoint, style string) []*kml.Placemark {
+		var placemarks []*kml.Placemark
+		for _, w := range waypoints {
+			placemarks = append(placemarks, &kml.Placemark{
+				StyleUrl: style,
+				Name:     w.Name,
+				Point:    kml.PosPoint(w.Pos),
+			})
+		}
+		return placemarks
+	}
+
+	/*
+		// startFolder: go
+		// geographicFolder: wht-blank
+		// waypointsFolder: ylw-blank
+		// importantFolder: red-stars
+		// resupplyFolder: ylw-circle
+	*/
+
+	importantFolder = &kml.Folder{
+		Name:       "Important Information",
+		Placemarks: collect(d.Important, "#red-stars"),
+	}
+	resupplyFolder = &kml.Folder{
+		Name:       "Resupply Locations",
+		Placemarks: collect(d.Resupplies, "#ylw-circle"),
+	}
+	geographicFolder = &kml.Folder{
+		Name:       "Geographic Designations",
+		Placemarks: collect(d.Geographic, "#wht-blank"),
+	}
+	startFolder = &kml.Folder{
+		Name: "Section Start Points",
+	}
+
+	for _, key := range d.Keys {
+		section := d.Sections[key]
+		var routes []*Route
+		for _, routeKey := range section.RouteKeys {
+			if routeKey.Required == OPTIONAL {
+				continue
+			}
+			routes = append(routes, section.Routes[routeKey])
+		}
+		for _, route := range routes {
+			if route.Modes[RAFT] != nil && route.Modes[HIKE] != nil && !route.Modes[RAFT].Segments[0].Line.Start().IsClose(route.Modes[HIKE].Segments[0].Line.Start(), DELTA) {
+				// needs separate points for hiking and packrafting
+				startFolder.Placemarks = append(startFolder.Placemarks, &kml.Placemark{
+					StyleUrl: fmt.Sprintf("#go"),
+					Name:     fmt.Sprintf("GPT%s%s hiking (%s)", section.Key.Code(), route.Key.Direction, section.Name),
+					Point:    kml.PosPoint(route.Modes[HIKE].Segments[0].Line.Start()),
+				})
+				startFolder.Placemarks = append(startFolder.Placemarks, &kml.Placemark{
+					StyleUrl: fmt.Sprintf("#go"),
+					Name:     fmt.Sprintf("GPT%s%s packrafting (%s)", section.Key.Code(), route.Key.Direction, section.Name),
+					Point:    kml.PosPoint(route.Modes[RAFT].Segments[0].Line.Start()),
+				})
+			} else {
+				startFolder.Placemarks = append(startFolder.Placemarks, &kml.Placemark{
+					StyleUrl: fmt.Sprintf("#go"),
+					Name:     fmt.Sprintf("GPT%s%s (%s)", section.Key.Code(), route.Key.Direction, section.Name),
+					Point:    kml.PosPoint(route.All[0].Line.Start()),
+				})
+			}
+		}
+	}
+
+	waypointsFolder = &kml.Folder{
+		Name: "Waypoints by Section",
+	}
+	for _, key := range d.Keys {
+		if HAS_SINGLE && key != SINGLE {
+			continue
+		}
+		section := d.Sections[key]
+		if len(section.Waypoints) == 0 {
+			continue
+		}
+		sectionFolder := &kml.Folder{
+			Name: section.FolderName(),
+		}
+		for _, w := range section.Waypoints {
+			sectionFolder.Placemarks = append(sectionFolder.Placemarks, &kml.Placemark{
+				StyleUrl: "#ylw-blank",
+				Name:     w.Name,
+				Point:    kml.PosPoint(w.Pos),
+			})
+		}
+		waypointsFolder.Folders = append(waypointsFolder.Folders, sectionFolder)
+	}
+
+	return
+}
+
 func (d *Data) SaveKmlWaypoints(dpath string, stamp string) error {
 	logln("Saving kml waypoints")
 	/*
@@ -273,74 +383,7 @@ func (d *Data) SaveKmlWaypoints(dpath string, stamp string) error {
 		debug("/Users/dave/src/gpt/input/Track Files/KMZ File (For Google Earth and Smartphones)/Waypoints/Waypoints.kmz", "input-waypoints.txt")
 	*/
 
-	collect := func(waypoints []Waypoint) []*kml.Placemark {
-		var placemarks []*kml.Placemark
-		for _, w := range waypoints {
-			placemarks = append(placemarks, &kml.Placemark{
-				Name:  w.Name,
-				Point: kml.PosPoint(w.Pos),
-			})
-		}
-		return placemarks
-	}
-
-	importantFolder := &kml.Folder{
-		Name:       "Important Information",
-		Open:       1,
-		Placemarks: collect(d.Important),
-	}
-	resupplyFolder := &kml.Folder{
-		Name:       "Resupply Locations",
-		Open:       1,
-		Placemarks: collect(d.Resupplies),
-	}
-	optionalStartFolder := &kml.Folder{
-		Name: "Optional Routes",
-		Open: 1,
-	}
-	regularStartFolder := &kml.Folder{
-		Name: "Regular Routes",
-		Open: 1,
-	}
-
-	for _, terminator := range d.Terminators {
-		var folder *kml.Folder
-		if terminator.Option == "" {
-			folder = regularStartFolder
-		} else {
-			folder = optionalStartFolder
-		}
-		folder.Placemarks = append(folder.Placemarks, &kml.Placemark{
-			Name:  terminator.String(),
-			Point: kml.PosPoint(terminator.Pos),
-		})
-	}
-
-	waypointsFolder := &kml.Folder{
-		Name: "Waypoints by Section",
-		Open: 1,
-	}
-	for _, key := range d.Keys {
-		if HAS_SINGLE && key != SINGLE {
-			continue
-		}
-		section := d.Sections[key]
-		if len(section.Waypoints) == 0 {
-			continue
-		}
-		sectionFolder := &kml.Folder{
-			Name: section.String(),
-			Open: 1,
-		}
-		for _, w := range section.Waypoints {
-			sectionFolder.Placemarks = append(sectionFolder.Placemarks, &kml.Placemark{
-				Name:  w.Name,
-				Open:  1,
-				Point: kml.PosPoint(w.Pos),
-			})
-		}
-		waypointsFolder.Folders = append(waypointsFolder.Folders, sectionFolder)
-	}
+	startFolder, resupplyFolder, geographicFolder, importantFolder, waypointsFolder := d.getWaypointFolders()
 
 	all := kml.Root{
 		Xmlns: "http://www.opengis.net/kml/2.2",
@@ -349,16 +392,12 @@ func (d *Data) SaveKmlWaypoints(dpath string, stamp string) error {
 			Folders: []*kml.Folder{
 				{
 					Name: "Points",
-					Open: 1,
 					Folders: []*kml.Folder{
-						{
-							Name:    "Section Start and End Points",
-							Open:    1,
-							Folders: []*kml.Folder{regularStartFolder, optionalStartFolder},
-						},
-						resupplyFolder,
 						importantFolder,
 						waypointsFolder,
+						startFolder,
+						resupplyFolder,
+						geographicFolder,
 					},
 				},
 			},
@@ -390,26 +429,15 @@ func (d *Data) SaveKmlWaypoints(dpath string, stamp string) error {
 		return fmt.Errorf("saving Resupply Locations.kmz: %w", err)
 	}
 
-	optStart := kml.Root{
-		Xmlns: "http://www.opengis.net/kml/2.2",
-		Document: kml.Document{
-			Name:    "Optional Start and End Points.kmz",
-			Folders: []*kml.Folder{optionalStartFolder},
-		},
-	}
-	if err := optStart.Save(filepath.Join(dpath, "KMZ File (For Google Earth and Smartphones)", "Waypoints", "Optional Start and End Points.kmz")); err != nil {
-		return fmt.Errorf("saving Optional Start and End Points.kmz: %w", err)
-	}
-
 	regStart := kml.Root{
 		Xmlns: "http://www.opengis.net/kml/2.2",
 		Document: kml.Document{
-			Name:    "Regular Start and End Points.kmz",
-			Folders: []*kml.Folder{regularStartFolder},
+			Name:    "Section Start Points.kmz",
+			Folders: []*kml.Folder{startFolder},
 		},
 	}
-	if err := regStart.Save(filepath.Join(dpath, "KMZ File (For Google Earth and Smartphones)", "Waypoints", "Regular Start and End Points.kmz")); err != nil {
-		return fmt.Errorf("saving Regular Start and End Points.kmz: %w", err)
+	if err := regStart.Save(filepath.Join(dpath, "KMZ File (For Google Earth and Smartphones)", "Waypoints", "Section Start Points.kmz")); err != nil {
+		return fmt.Errorf("saving Section Start Points.kmz: %w", err)
 	}
 
 	way := kml.Root{
@@ -448,6 +476,30 @@ func addSegmentStyles(d *kml.Document) {
 			})
 		}
 	}
+
+	addStyle := func(fname string) *kml.Style {
+		return &kml.Style{
+			Id: fname,
+			IconStyle: &kml.IconStyle{
+				Scale:   0.8,
+				Icon:    &kml.Icon{Href: fmt.Sprintf("http://maps.google.com/mapfiles/kml/paddle/%s.png", fname)},
+				HotSpot: &kml.HotSpot{X: 32, Y: 1, Xunits: "pixels", Yunits: "pixels"},
+			},
+			ListStyle: &kml.ListStyle{
+				Scale:    0.5,
+				ItemIcon: &kml.Icon{Href: fmt.Sprintf("http://maps.google.com/mapfiles/kml/paddle/%s-lv.png", fname)},
+			},
+		}
+	}
+
+	colours := []string{"blu", "wht", "ylw", "red", "grn", "pink", "orange"}
+	decorations := []string{"blank", "stars", "circle"}
+	for _, colour := range colours {
+		for _, decoration := range decorations {
+			d.Styles = append(d.Styles, addStyle(fmt.Sprintf("%s-%s", colour, decoration)))
+		}
+	}
+	d.Styles = append(d.Styles, addStyle("go"))
 }
 
 //func (d *Data) SaveKmlTracks(dpath string, stamp string) error {

@@ -142,7 +142,8 @@ type LabelStyle struct {
 }
 
 type ListStyle struct {
-	ItemIcon *Icon `xml:"ItemIcon,omitempty"`
+	Scale    geo.FloatOne `xml:"scale"`
+	ItemIcon *Icon        `xml:"ItemIcon,omitempty"`
 }
 
 type Icon struct {
