@@ -250,15 +250,21 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 				for _, optionVariantsFolder := range sectionFolder.Folders {
 					routes := map[RouteKey]bool{}
 					var optionNumber int
+					var optionName string
 					switch {
 					case optionVariantsFolder.Name == "Variants":
 						optionNumber = 0
 					case strings.HasPrefix(optionVariantsFolder.Name, "Option"):
-						num, err := strconv.Atoi(strings.TrimPrefix(optionVariantsFolder.Name, "Option "))
+						matches := optionFolderRegex.FindStringSubmatch(optionVariantsFolder.Name)
+						if len(matches) == 0 {
+							return fmt.Errorf("incorrect name format %q in %q", optionVariantsFolder.Name, section.Raw)
+						}
+						num, err := strconv.Atoi(matches[1])
 						if err != nil {
 							return fmt.Errorf("parsing option number from %q in %q: %w", optionVariantsFolder.Name, section.Raw, err)
 						}
 						optionNumber = num
+						optionName = matches[3]
 					default:
 						return fmt.Errorf("incorrect folder name %q in %q", optionVariantsFolder.Name, section.Raw)
 					}
@@ -288,6 +294,7 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 							Section: section,
 							Key:     rkey,
 							Name:    routeName,
+							Option:  optionName,
 							All:     []*Segment{},
 							Modes:   map[ModeType]*RouteModeData{},
 						}
@@ -482,6 +489,15 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 						Name: strings.TrimSuffix(p.Name, "-"), // all waypoint names end with "-"?
 					})
 				}
+				for _, f := range folder.Folders {
+					for _, p := range f.Placemarks {
+						section.Waypoints = append(section.Waypoints, Waypoint{
+							Pos:    p.Point.Pos(),
+							Name:   strings.TrimSuffix(p.Name, "-"), // all waypoint names end with "-"?
+							Folder: f.Name,
+						})
+					}
+				}
 			}
 		}
 	}
@@ -559,6 +575,7 @@ func getSegment(route *Route, placemark *kml.Placemark, codes map[string]bool) (
 	return segment, nil
 }
 
+var optionFolderRegex = regexp.MustCompile(`Option ([0-9]+) ?(\((.*)\))?$`)
 var sectionFolderRegex = regexp.MustCompile(`^GPT([0-9]{2})([HP])? \((.*)\)$`)
 var segmentPlacemarkRegex = regexp.MustCompile(`^((EXP)-)?(RH|RP|RR|OH|OP)-(((BB|CC|MR|PR|TL|FJ|LK|RI|FY)&?)+)-?([VAI])?([12])? {.*} \[.*] ?(\((.*)\))?$`)
 var routeFolderRegex = regexp.MustCompile(`^([0-9]{2})?([A-Z]{1,2})?([a-z])? ?(\((.*)\))?$`)

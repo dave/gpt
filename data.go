@@ -138,7 +138,8 @@ func (d *Data) Normalise() error {
 
 type Waypoint struct {
 	geo.Pos
-	Name string
+	Name   string
+	Folder string
 }
 
 // Terminator is the position of the start/end of a section

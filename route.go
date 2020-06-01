@@ -17,6 +17,7 @@ type Route struct {
 	Section *Section
 	Key     RouteKey
 	Name    string // track name for optional tracks
+	Option  string // name from option folder
 	All     []*Segment
 	Modes   map[ModeType]*RouteModeData
 }
@@ -44,7 +45,8 @@ func (r *Route) FolderName() string {
 		name = fmt.Sprintf("%s%s", r.Key.Variant, r.Key.Network)
 	}
 
-	if r.Name != "" {
+	// only show name if variant
+	if r.Key.Option == 0 && r.Key.Variant != "" && r.Name != "" {
 		name += fmt.Sprintf(" (%s)", r.Name)
 	}
 

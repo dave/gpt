@@ -204,7 +204,7 @@ var colours = map[string]string{
 	"rose":          "df9f9f",
 	"red":           "ff0000",
 	"green":         "00ffb1",
-	"blue":          "0000ff",
+	"blue":          "00aaff",
 	"white":         "ffffff",
 }
 

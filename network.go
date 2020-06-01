@@ -131,6 +131,21 @@ func (n *Network) BuildStraights() {
 		f.Segments = append(f.Segments, segment)
 		s.Segments = append(s.Segments, segment)
 	}
+	for _, straight := range n.Straights {
+		for _, flush := range straight.Flushes {
+			namesMap := map[string]bool{}
+			for _, segment := range flush.Segments {
+				if segment.Name == "" {
+					continue
+				}
+				if namesMap[segment.Name] {
+					continue
+				}
+				namesMap[segment.Name] = true
+				flush.Names = append(flush.Names, segment.Name)
+			}
+		}
+	}
 }
 
 func (n *Network) LevelWater() {
@@ -716,6 +731,7 @@ type Straight struct {
 type Flush struct {
 	From, Length float64
 	Terrains     []string
+	Names        []string
 	Verification string
 	Directional  string
 	Experimental bool
@@ -740,6 +756,9 @@ func (f Flush) Description(id int, waypoint bool) string {
 	sb.WriteString(fmt.Sprintf(" for %.1f km", f.Length))
 	if waypoint {
 		sb.WriteString(fmt.Sprintf(" #%d", id))
+	}
+	if len(f.Names) > 0 {
+		sb.WriteString(fmt.Sprintf(" (%s)", strings.Join(f.Names, ", ")))
 	}
 	return sb.String()
 }

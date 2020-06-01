@@ -15,7 +15,7 @@ import (
 
 var SrtmClient *geoelevations.Srtm
 
-const VERSION = "v0.1.1"
+const VERSION = "v0.1.2"
 const DELTA = 0.075 // see https://docs.google.com/spreadsheets/d/1q610i2TkfUTHWvtqVAJ0V8zFtzPMQKBXEm7jiPyuDCQ/edit
 
 var LOG, DEBUG bool
@@ -105,6 +105,33 @@ func Main() error {
 
 	if err := data.Normalise(); err != nil {
 		return fmt.Errorf("normalising: %w", err)
+	}
+
+	// temporary code - find main optional route and assign name to all other variants in that option
+	for _, section := range data.Sections {
+		optionNames := map[int]string{}
+		for _, route := range section.Routes {
+			if route.Option != "" {
+				continue
+			}
+			if route.Key.Required == REGULAR {
+				continue
+			}
+			if route.Key.Option == 0 {
+				continue
+			}
+			name, found := optionNames[route.Key.Option]
+			if !found {
+				for _, r := range section.Routes {
+					if r.Key.Option == route.Key.Option && r.Key.Variant == "" {
+						optionNames[route.Key.Option] = r.Name
+						name = r.Name
+						break
+					}
+				}
+			}
+			route.Option = name
+		}
 	}
 
 	if err := data.SaveMaster(*output, *renames); err != nil {

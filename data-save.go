@@ -12,126 +12,6 @@ import (
 	"github.com/dave/gpt/kml"
 )
 
-//func mergeSegments(n1, n2 *Network) ([]*SegmentData, error) {
-//
-//	var np, nh *Network
-//	if n1.Route.Packrafting {
-//		np = n1
-//		nh = n2
-//	} else {
-//		nh = n1
-//		np = n2
-//	}
-//	sp, sh := np.Segments, nh.Segments
-//
-//	var out []*SegmentData
-//	all := map[string]bool{}
-//	allP := map[string]*Segment{}
-//	allH := map[string]*Segment{}
-//	for _, segment := range sp {
-//		allP[segment.Raw] = segment
-//		if !all[segment.Raw] {
-//			all[segment.Raw] = true
-//			out = append(out, &SegmentData{Segment: segment})
-//		}
-//	}
-//	for _, segment := range sh {
-//		allH[segment.Raw] = segment
-//		if !all[segment.Raw] {
-//			all[segment.Raw] = true
-//			out = append(out, &SegmentData{Segment: segment})
-//		}
-//	}
-//	for _, data := range out {
-//		if allP[data.Segment.Raw] != nil {
-//			data.HasPackrafting = true
-//			data.PackraftingFrom = allP[data.Segment.Raw].From
-//		}
-//		if allH[data.Segment.Raw] != nil {
-//			data.HasHiking = true
-//			data.HikingFrom = allH[data.Segment.Raw].From
-//		}
-//	}
-//
-//	// check reversal status of all segments
-//	for raw := range all {
-//		s1 := allP[raw]
-//		s2 := allH[raw]
-//		if s1 != nil && s2 != nil {
-//			//if s1.Reversed != s2.Reversed {
-//			//	switch s1.Raw {
-//			//	case "EXP-OH-TL-I@21-03-#012", "EXP-OH-MR-V@21-03-#001", "EXP-OH-BB-A@28H-02B-#005":
-//			//	// TODO - what to do here?
-//			//	default:
-//			//		//debugfln("segment %s reversal state not the same between hiking and packrafting", s1.Raw)
-//			//		return nil, fmt.Errorf("segment %s reversal state not the same between hiking and packrafting", s1.Raw)
-//			//	}
-//			//}
-//		}
-//	}
-//
-//	orderMap := map[string]map[bool]int{}
-//	for i, segment := range sp {
-//		if orderMap[segment.Raw] == nil {
-//			orderMap[segment.Raw] = map[bool]int{true: -1, false: -1}
-//		}
-//		orderMap[segment.Raw][true] = i
-//	}
-//	for i, segment := range sh {
-//		if orderMap[segment.Raw] == nil {
-//			orderMap[segment.Raw] = map[bool]int{true: -1, false: -1}
-//		}
-//		orderMap[segment.Raw][false] = i
-//	}
-//
-//	var err error
-//	sort.Slice(out, func(i, j int) bool {
-//		i1 := orderMap[out[i].Segment.Raw][true]
-//		j1 := orderMap[out[j].Segment.Raw][true]
-//
-//		i2 := orderMap[out[i].Segment.Raw][false]
-//		j2 := orderMap[out[j].Segment.Raw][false]
-//
-//		if (i1 == -1 || j1 == -1) && (i2 == -1 || j2 == -1) {
-//			return false
-//		} else if i1 == -1 || j1 == -1 {
-//			return i2 < j2
-//		} else if i2 == -1 || j2 == -1 {
-//			return i1 < j1
-//		}
-//
-//		less1 := i1 < j1
-//		less2 := i2 < j2
-//		if less1 != less2 {
-//			//debugfln("%q (#%d) and %q (#%d) in %q: %v", out[i], orderMap[out[i]][true], out[j], orderMap[out[j]][true], n1.Debug(), less1)
-//			//debugfln("%q (#%d) and %q (#%d) in %q: %v", out[i], orderMap[out[i]][false], out[j], orderMap[out[j]][false], n2.Debug(), less2)
-//			err = fmt.Errorf("incompatible segment order in %q and %q", n1.Debug(), n2.Debug())
-//			return false
-//		}
-//		return less1
-//	})
-//	if err != nil {
-//		return nil, err
-//	}
-//	return out, nil
-//}
-//
-//func findNetworksWithMatchingSegments(n *Network, search []*Network) map[int]int {
-//	count := map[int]int{}
-//	for _, segment := range n.Segments {
-//		for j, network := range search {
-//			for _, s := range network.Segments {
-//				if segment.Raw == s.Raw {
-//					count[j]++
-//				}
-//			}
-//		}
-//	}
-//	return count
-//}
-
-//var counter, counterRoutes int
-
 func (d *Data) SaveMaster(dpath string, updateLegacy bool) error {
 	logln("saving kml master")
 	var renames []struct{ from, to string }
@@ -183,9 +63,14 @@ func (d *Data) SaveMaster(dpath string, updateLegacy bool) error {
 						if route.Key.Option == 0 {
 							routeHolderFolder = &kml.Folder{Name: "Variants"}
 						} else {
-							routeHolderFolder = &kml.Folder{Name: fmt.Sprintf("Option %d", route.Key.Option)}
+							var name string
+							if route.Option != "" {
+								name = fmt.Sprintf("Option %d (%s)", route.Key.Option, route.Option)
+							} else {
+								name = fmt.Sprintf("Option %d", route.Key.Option)
+							}
+							routeHolderFolder = &kml.Folder{Name: name}
 						}
-						//routeFolder = &kml.Folder{Name: route.FolderName()}
 						optionalRouteHolderFolders[route.Key.Option] = routeHolderFolder
 						sectionFolder.Folders = append(sectionFolder.Folders, routeHolderFolder)
 					}
@@ -237,14 +122,15 @@ func (d *Data) SaveMaster(dpath string, updateLegacy bool) error {
 	//	return of.Folders[i].Name < of.Folders[j].Name
 	//})
 
-	startFolder, resupplyFolder, geographicFolder, importantFolder, waypointsFolder := d.getWaypointFolders()
+	regularStartEndFolder, optionalStartEndFolder, resupplyFolder, geographicFolder, importantFolder, waypointsFolder := d.getWaypointFolders()
 
 	pointsFolder := &kml.Folder{
 		Name: "Points",
 		Folders: []*kml.Folder{
 			importantFolder,
 			waypointsFolder,
-			startFolder,
+			regularStartEndFolder,
+			optionalStartEndFolder,
 			resupplyFolder,
 			geographicFolder,
 		},
@@ -276,7 +162,7 @@ func (d *Data) SaveMaster(dpath string, updateLegacy bool) error {
 	return nil
 }
 
-func (d *Data) getWaypointFolders() (startFolder, resupplyFolder, geographicFolder, importantFolder, waypointsFolder *kml.Folder) {
+func (d *Data) getWaypointFolders() (regularStartEndFolder, optionalStartEndFolder, resupplyFolder, geographicFolder, importantFolder, waypointsFolder *kml.Folder) {
 
 	collect := func(waypoints []Waypoint, style string) []*kml.Placemark {
 		var placemarks []*kml.Placemark
@@ -310,37 +196,69 @@ func (d *Data) getWaypointFolders() (startFolder, resupplyFolder, geographicFold
 		Name:       "Geographic Designations",
 		Placemarks: collect(d.Geographic, "#wht-blank"),
 	}
-	startFolder = &kml.Folder{
-		Name: "Section Start Points",
+	regularStartEndFolder = &kml.Folder{
+		Name: "Regular Start / End Points",
+	}
+	optionalStartEndFolder = &kml.Folder{
+		Name: "Optional Start / End Points",
 	}
 
 	for _, key := range d.Keys {
 		section := d.Sections[key]
 		var routes []*Route
 		for _, routeKey := range section.RouteKeys {
-			if routeKey.Required == OPTIONAL {
-				continue
-			}
 			routes = append(routes, section.Routes[routeKey])
 		}
 		for _, route := range routes {
+			var folder *kml.Folder
+			var nameFormat string
+			if route.Key.Required == REGULAR {
+				folder = regularStartEndFolder
+				nameFormat = fmt.Sprintf("GPT%s%s%%s (%s)", section.Key.Code(), route.Key.Direction, section.Name)
+			} else {
+				folder = optionalStartEndFolder
+				if route.Name == "" {
+					nameFormat = fmt.Sprintf("%s%%s", route.String())
+				} else {
+					nameFormat = fmt.Sprintf("%s%%s (%s)", route.String(), route.Name)
+				}
+			}
 			if route.Modes[RAFT] != nil && route.Modes[HIKE] != nil && !route.Modes[RAFT].Segments[0].Line.Start().IsClose(route.Modes[HIKE].Segments[0].Line.Start(), DELTA) {
 				// needs separate points for hiking and packrafting
-				startFolder.Placemarks = append(startFolder.Placemarks, &kml.Placemark{
+				folder.Placemarks = append(folder.Placemarks, &kml.Placemark{
 					StyleUrl: fmt.Sprintf("#go"),
-					Name:     fmt.Sprintf("GPT%s%s hiking (%s)", section.Key.Code(), route.Key.Direction, section.Name),
+					Name:     fmt.Sprintf(nameFormat, " hiking") + " start",
 					Point:    kml.PosPoint(route.Modes[HIKE].Segments[0].Line.Start()),
 				})
-				startFolder.Placemarks = append(startFolder.Placemarks, &kml.Placemark{
+				folder.Placemarks = append(folder.Placemarks, &kml.Placemark{
 					StyleUrl: fmt.Sprintf("#go"),
-					Name:     fmt.Sprintf("GPT%s%s packrafting (%s)", section.Key.Code(), route.Key.Direction, section.Name),
+					Name:     fmt.Sprintf(nameFormat, " packrafting") + " start",
 					Point:    kml.PosPoint(route.Modes[RAFT].Segments[0].Line.Start()),
 				})
 			} else {
-				startFolder.Placemarks = append(startFolder.Placemarks, &kml.Placemark{
+				folder.Placemarks = append(folder.Placemarks, &kml.Placemark{
 					StyleUrl: fmt.Sprintf("#go"),
-					Name:     fmt.Sprintf("GPT%s%s (%s)", section.Key.Code(), route.Key.Direction, section.Name),
+					Name:     fmt.Sprintf(nameFormat, "") + " start",
 					Point:    kml.PosPoint(route.All[0].Line.Start()),
+				})
+			}
+			if route.Modes[RAFT] != nil && route.Modes[HIKE] != nil && !route.Modes[RAFT].Segments[len(route.Modes[RAFT].Segments)-1].Line.End().IsClose(route.Modes[HIKE].Segments[len(route.Modes[HIKE].Segments)-1].Line.End(), DELTA) {
+				// needs separate points for hiking and packrafting
+				folder.Placemarks = append(folder.Placemarks, &kml.Placemark{
+					StyleUrl: fmt.Sprintf("#grn-square"),
+					Name:     fmt.Sprintf(nameFormat, " hiking") + " end",
+					Point:    kml.PosPoint(route.Modes[HIKE].Segments[len(route.Modes[HIKE].Segments)-1].Line.End()),
+				})
+				folder.Placemarks = append(folder.Placemarks, &kml.Placemark{
+					StyleUrl: fmt.Sprintf("#grn-square"),
+					Name:     fmt.Sprintf(nameFormat, " packrafting") + " end",
+					Point:    kml.PosPoint(route.Modes[RAFT].Segments[len(route.Modes[RAFT].Segments)-1].Line.End()),
+				})
+			} else {
+				folder.Placemarks = append(folder.Placemarks, &kml.Placemark{
+					StyleUrl: fmt.Sprintf("#grn-square"),
+					Name:     fmt.Sprintf(nameFormat, "") + " end",
+					Point:    kml.PosPoint(route.All[len(route.All)-1].Line.End()),
 				})
 			}
 		}
@@ -354,18 +272,31 @@ func (d *Data) getWaypointFolders() (startFolder, resupplyFolder, geographicFold
 			continue
 		}
 		section := d.Sections[key]
-		if len(section.Waypoints) == 0 {
-			continue
-		}
 		sectionFolder := &kml.Folder{
 			Name: section.FolderName(),
 		}
+		subfolders := map[string]*kml.Folder{}
 		for _, w := range section.Waypoints {
-			sectionFolder.Placemarks = append(sectionFolder.Placemarks, &kml.Placemark{
-				StyleUrl: "#ylw-blank",
-				Name:     w.Name,
-				Point:    kml.PosPoint(w.Pos),
-			})
+			if w.Folder == "" {
+				sectionFolder.Placemarks = append(sectionFolder.Placemarks, &kml.Placemark{
+					StyleUrl: "#ylw-blank",
+					Name:     w.Name,
+					Point:    kml.PosPoint(w.Pos),
+				})
+			} else {
+				if subfolders[w.Folder] == nil {
+					f := &kml.Folder{
+						Name: w.Folder,
+					}
+					subfolders[w.Folder] = f
+					sectionFolder.Folders = append(sectionFolder.Folders, f)
+				}
+				subfolders[w.Folder].Placemarks = append(subfolders[w.Folder].Placemarks, &kml.Placemark{
+					StyleUrl: "#ylw-blank",
+					Name:     w.Name,
+					Point:    kml.PosPoint(w.Pos),
+				})
+			}
 		}
 		waypointsFolder.Folders = append(waypointsFolder.Folders, sectionFolder)
 	}
@@ -384,7 +315,7 @@ func (d *Data) SaveKmlWaypoints(dpath string, stamp string) error {
 		debug("/Users/dave/src/gpt/input/Track Files/KMZ File (For Google Earth and Smartphones)/Waypoints/Waypoints.kmz", "input-waypoints.txt")
 	*/
 
-	startFolder, resupplyFolder, geographicFolder, importantFolder, waypointsFolder := d.getWaypointFolders()
+	regularStartEndFolder, optionalStartEndFolder, resupplyFolder, geographicFolder, importantFolder, waypointsFolder := d.getWaypointFolders()
 
 	all := kml.Root{
 		Xmlns: "http://www.opengis.net/kml/2.2",
@@ -396,7 +327,8 @@ func (d *Data) SaveKmlWaypoints(dpath string, stamp string) error {
 					Folders: []*kml.Folder{
 						importantFolder,
 						waypointsFolder,
-						startFolder,
+						regularStartEndFolder,
+						optionalStartEndFolder,
 						resupplyFolder,
 						geographicFolder,
 					},
@@ -434,7 +366,7 @@ func (d *Data) SaveKmlWaypoints(dpath string, stamp string) error {
 		Xmlns: "http://www.opengis.net/kml/2.2",
 		Document: kml.Document{
 			Name:    "Section Start Points.kmz",
-			Folders: []*kml.Folder{startFolder},
+			Folders: []*kml.Folder{regularStartEndFolder, optionalStartEndFolder},
 		},
 	}
 	if err := regStart.Save(filepath.Join(dpath, "KMZ File (For Google Earth and Smartphones)", "Waypoints", "Section Start Points.kmz")); err != nil {
@@ -494,7 +426,7 @@ func addSegmentStyles(d *kml.Document) {
 	}
 
 	colours := []string{"blu", "wht", "ylw", "red", "grn", "pink", "orange"}
-	decorations := []string{"blank", "stars", "circle"}
+	decorations := []string{"blank", "stars", "circle", "square"}
 	for _, colour := range colours {
 		for _, decoration := range decorations {
 			d.Styles = append(d.Styles, addStyle(fmt.Sprintf("%s-%s", colour, decoration)))
@@ -1281,8 +1213,14 @@ func (d *Data) SaveGaia(dpath string) error {
 						trk.Name = fmt.Sprintf("GPT%s%s hiking alternatives %d", route.Section.Key.Code(), direction, route.Key.AlternativesIndex)
 					} else if route.Key.Option == 0 {
 						trk.Name = fmt.Sprintf("GPT%s variant %s%s", route.Section.Key.Code(), route.Key.Variant, route.Key.Network)
+						if route.Name != "" {
+							trk.Name += fmt.Sprintf(" (%s)", route.Name)
+						}
 					} else {
 						trk.Name = fmt.Sprintf("GPT%s option %d%s%s", route.Section.Key.Code(), route.Key.Option, route.Key.Variant, route.Key.Network)
+						if route.Option != "" && route.Key.Variant == "" && (route.Key.Network == "" || route.Key.Network == "a") {
+							trk.Name += fmt.Sprintf(" (%s)", route.Option)
+						}
 					}
 					trk.Desc = HEADING_SYMBOL + " " + trk.Name + "\n\n"
 
