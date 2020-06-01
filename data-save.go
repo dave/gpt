@@ -214,14 +214,19 @@ func (d *Data) getWaypointFolders() (regularStartEndFolder, optionalStartEndFold
 			var nameFormat string
 			if route.Key.Required == REGULAR {
 				folder = regularStartEndFolder
-				nameFormat = fmt.Sprintf("GPT%s%s%%s (%s)", section.Key.Code(), route.Key.Direction, section.Name)
+				nameFormat = fmt.Sprintf("GPT%s%s%%s", section.Key.Code(), route.Key.Direction)
+				//nameFormat = fmt.Sprintf("GPT%s%s%%s (%s)", section.Key.Code(), route.Key.Direction, section.Name)
 			} else {
-				folder = optionalStartEndFolder
-				if route.Name == "" {
-					nameFormat = fmt.Sprintf("%s%%s", route.String())
-				} else {
-					nameFormat = fmt.Sprintf("%s%%s (%s)", route.String(), route.Name)
+				if route.Key.Alternatives {
+					continue
 				}
+				folder = optionalStartEndFolder
+				nameFormat = fmt.Sprintf("%s%%s", route.String())
+				//if route.Name == "" {
+				//	nameFormat = fmt.Sprintf("%s%%s", route.String())
+				//} else {
+				//	nameFormat = fmt.Sprintf("%s%%s (%s)", route.String(), route.Name)
+				//}
 			}
 			if route.Modes[RAFT] != nil && route.Modes[HIKE] != nil && !route.Modes[RAFT].Segments[0].Line.Start().IsClose(route.Modes[HIKE].Segments[0].Line.Start(), DELTA) {
 				// needs separate points for hiking and packrafting

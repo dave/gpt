@@ -114,7 +114,7 @@ func (r *Route) String() string {
 		if r.Key.Option > 0 {
 			option = fmt.Sprintf("%02d", r.Key.Option)
 		}
-		key = fmt.Sprintf("-%s%s%s%s", alternatives, r.Key.Direction, option, r.Key.Variant)
+		key = fmt.Sprintf("-%s%s%s%s%s", alternatives, r.Key.Direction, option, r.Key.Variant, r.Key.Network)
 	} else {
 		if r.Key.Direction != "" {
 			key = r.Key.Direction
