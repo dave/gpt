@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path"
 	"time"
 
 	"github.com/dave/gpt/kml"
@@ -15,7 +16,7 @@ import (
 
 var SrtmClient *geoelevations.Srtm
 
-const VERSION = "v0.1.3"
+const VERSION = "v0.1.4"
 const DELTA = 0.075 // see https://docs.google.com/spreadsheets/d/1q610i2TkfUTHWvtqVAJ0V8zFtzPMQKBXEm7jiPyuDCQ/edit
 
 var LOG, DEBUG bool
@@ -79,7 +80,7 @@ func Main() error {
 	if *ele {
 		log.SetOutput(ioutil.Discard)
 		var err error
-		SrtmClient, err = geoelevations.NewSrtm(http.DefaultClient)
+		SrtmClient, err = geoelevations.NewSrtmWithCustomCacheDir(http.DefaultClient, path.Join(os.Getenv("HOME"), ".geoelevations1"))
 		if err != nil {
 			return fmt.Errorf("creating srtm client: %w", err)
 		}

@@ -1121,9 +1121,10 @@ func (d *Data) SaveGaia(dpath string) error {
 		return map[ModeType]map[string]*gpx.Root{HIKE: newContents(), RAFT: newContents()}
 	}
 	clusters := []clusterStruct{
-		{name: "north", from: 1, to: 16, modes: newModes()},
-		{name: "south", from: 17, to: 39, modes: newModes()},
-		{name: "extensions", from: 40, to: 99, modes: newModes()},
+		{name: "main-north", from: 1, to: 16, modes: newModes()},
+		{name: "main-south", from: 17, to: 40, modes: newModes()},
+		{name: "extensions-south", from: 41, to: 69, modes: newModes()},
+		{name: "extensions-west", from: 72, to: 99, modes: newModes()},
 		{name: "all", from: 1, to: 99, modes: newModes()},
 	}
 
