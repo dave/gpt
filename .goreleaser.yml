@@ -9,15 +9,12 @@ before:
     # You may remove this if you don't use go modules.
     - go mod download
 builds:
-- env:
-  - CGO_ENABLED=0
-  goos:
-    - linux
-    - darwin
-    - windows
-  goarch:
-    - 386
-    - amd64
+  - env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
 archives:
 - replacements:
     darwin: Darwin
@@ -59,7 +56,7 @@ brews:
     # same kind. We will probably unify this in the next major version like it is done with scoop.
 
     # Github repository to push the tap to.
-    github:
+    tap:
       owner: dave
       name: homebrew-gpt
 
