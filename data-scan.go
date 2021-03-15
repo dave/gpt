@@ -448,22 +448,25 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 					continue
 				}
 				d.Geographic = append(d.Geographic, Waypoint{
-					Pos:  p.Point.Pos(),
-					Name: p.Name,
+					Pos:    p.Point.Pos(),
+					Name:   p.Name,
+					Legacy: p.Legacy,
 				})
 			}
 		case "Resupply Locations":
 			for _, p := range folder.Placemarks {
 				d.Resupplies = append(d.Resupplies, Waypoint{
-					Pos:  p.Point.Pos(),
-					Name: p.Name,
+					Pos:    p.Point.Pos(),
+					Name:   p.Name,
+					Legacy: p.Legacy,
 				})
 			}
 		case "Important Information":
 			for _, p := range folder.Placemarks {
 				d.Important = append(d.Important, Waypoint{
-					Pos:  p.Point.Pos(),
-					Name: p.Name,
+					Pos:    p.Point.Pos(),
+					Name:   p.Name,
+					Legacy: p.Legacy,
 				})
 			}
 		case "Waypoints by Section":
@@ -485,8 +488,9 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 				}
 				for _, p := range folder.Placemarks {
 					section.Waypoints = append(section.Waypoints, Waypoint{
-						Pos:  p.Point.Pos(),
-						Name: strings.TrimSuffix(p.Name, "-"), // all waypoint names end with "-"?
+						Pos:    p.Point.Pos(),
+						Name:   strings.TrimSuffix(p.Name, "-"), // all waypoint names end with "-"?
+						Legacy: p.Legacy,
 					})
 				}
 				for _, f := range folder.Folders {
@@ -494,6 +498,7 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 						section.Waypoints = append(section.Waypoints, Waypoint{
 							Pos:    p.Point.Pos(),
 							Name:   strings.TrimSuffix(p.Name, "-"), // all waypoint names end with "-"?
+							Legacy: p.Legacy,
 							Folder: f.Name,
 						})
 					}

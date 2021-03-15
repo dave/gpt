@@ -12,9 +12,35 @@ import (
 	"github.com/dave/gpt/kml"
 )
 
+type LegacyRenameHolder struct {
+	update    bool
+	segments  []struct{ from, to string }
+	waypoints []struct{ from, to string }
+}
+
+func (r *LegacyRenameHolder) segment(legacy, name string) string {
+	if !r.update {
+		return legacy
+	}
+	if legacy != name {
+		r.segments = append(r.segments, struct{ from, to string }{legacy, name})
+	}
+	return name
+}
+
+func (r *LegacyRenameHolder) waypoint(legacy, name string) string {
+	if !r.update {
+		return legacy
+	}
+	if legacy != name {
+		r.waypoints = append(r.waypoints, struct{ from, to string }{legacy, name})
+	}
+	return name
+}
+
 func (d *Data) SaveMaster(dpath string, updateLegacy bool) error {
 	logln("saving kml master")
-	var renames []struct{ from, to string }
+	legacy := &LegacyRenameHolder{update: updateLegacy}
 
 	tracksFolder := &kml.Folder{Name: "Tracks"}
 
@@ -80,13 +106,9 @@ func (d *Data) SaveMaster(dpath string, updateLegacy bool) error {
 					panic("")
 				}
 				for _, segment := range route.All {
-					legacy := segment.Legacy
-					if updateLegacy {
-						legacy = segment.PlacemarkName()
-					}
 					routeFolder.Placemarks = append(routeFolder.Placemarks, &kml.Placemark{
 						Name:     segment.PlacemarkName(),
-						Legacy:   legacy,
+						Legacy:   legacy.segment(segment.Legacy, segment.PlacemarkName()),
 						Open:     1,
 						StyleUrl: fmt.Sprintf("#%s", segment.Style()),
 						LineString: &kml.LineString{
@@ -94,9 +116,6 @@ func (d *Data) SaveMaster(dpath string, updateLegacy bool) error {
 							Coordinates: kml.LineCoordinates(segment.Line),
 						},
 					})
-					if segment.Legacy != segment.PlacemarkName() {
-						renames = append(renames, struct{ from, to string }{from: segment.Legacy, to: segment.PlacemarkName()})
-					}
 				}
 			}
 		}
@@ -122,7 +141,7 @@ func (d *Data) SaveMaster(dpath string, updateLegacy bool) error {
 	//	return of.Folders[i].Name < of.Folders[j].Name
 	//})
 
-	regularStartEndFolder, optionalStartEndFolder, resupplyFolder, geographicFolder, importantFolder, waypointsFolder := d.getWaypointFolders()
+	regularStartEndFolder, optionalStartEndFolder, resupplyFolder, geographicFolder, importantFolder, waypointsFolder := d.getWaypointFolders(legacy)
 
 	pointsFolder := &kml.Folder{
 		Name: "Points",
@@ -151,18 +170,26 @@ func (d *Data) SaveMaster(dpath string, updateLegacy bool) error {
 	}
 
 	if updateLegacy {
-		var sb strings.Builder
-		for _, rename := range renames {
-			sb.WriteString(fmt.Sprintf("%q, %q\n", rename.from, rename.to))
+		var sbSegments strings.Builder
+		for _, rename := range legacy.segments {
+			sbSegments.WriteString(fmt.Sprintf("%q, %q\n", rename.from, rename.to))
 		}
-		if err := ioutil.WriteFile(filepath.Join(dpath, "renames.txt"), []byte(sb.String()), 0666); err != nil {
-			return fmt.Errorf("writing renames file: %w", err)
+		if err := ioutil.WriteFile(filepath.Join(dpath, "segment-renames.txt"), []byte(sbSegments.String()), 0666); err != nil {
+			return fmt.Errorf("writing segment renames file: %w", err)
+		}
+
+		var sbWaypoints strings.Builder
+		for _, rename := range legacy.waypoints {
+			sbWaypoints.WriteString(fmt.Sprintf("%q, %q\n", rename.from, rename.to))
+		}
+		if err := ioutil.WriteFile(filepath.Join(dpath, "waypoint-renames.txt"), []byte(sbWaypoints.String()), 0666); err != nil {
+			return fmt.Errorf("writing waypoint renames file: %w", err)
 		}
 	}
 	return nil
 }
 
-func (d *Data) getWaypointFolders() (regularStartEndFolder, optionalStartEndFolder, resupplyFolder, geographicFolder, importantFolder, waypointsFolder *kml.Folder) {
+func (d *Data) getWaypointFolders(legacy *LegacyRenameHolder) (regularStartEndFolder, optionalStartEndFolder, resupplyFolder, geographicFolder, importantFolder, waypointsFolder *kml.Folder) {
 
 	collect := func(waypoints []Waypoint, style string) []*kml.Placemark {
 		var placemarks []*kml.Placemark
@@ -170,6 +197,7 @@ func (d *Data) getWaypointFolders() (regularStartEndFolder, optionalStartEndFold
 			placemarks = append(placemarks, &kml.Placemark{
 				StyleUrl: style,
 				Name:     w.Name,
+				Legacy:   legacy.waypoint(w.Legacy, w.Name),
 				Point:    kml.PosPoint(w.Pos),
 			})
 		}
@@ -286,6 +314,7 @@ func (d *Data) getWaypointFolders() (regularStartEndFolder, optionalStartEndFold
 				sectionFolder.Placemarks = append(sectionFolder.Placemarks, &kml.Placemark{
 					StyleUrl: "#ylw-blank",
 					Name:     w.Name,
+					Legacy:   legacy.waypoint(w.Legacy, w.Name),
 					Point:    kml.PosPoint(w.Pos),
 				})
 			} else {
@@ -299,6 +328,7 @@ func (d *Data) getWaypointFolders() (regularStartEndFolder, optionalStartEndFold
 				subfolders[w.Folder].Placemarks = append(subfolders[w.Folder].Placemarks, &kml.Placemark{
 					StyleUrl: "#ylw-blank",
 					Name:     w.Name,
+					Legacy:   legacy.waypoint(w.Legacy, w.Name),
 					Point:    kml.PosPoint(w.Pos),
 				})
 			}
@@ -320,7 +350,9 @@ func (d *Data) SaveKmlWaypoints(dpath string, stamp string) error {
 		debug("/Users/dave/src/gpt/input/Track Files/KMZ File (For Google Earth and Smartphones)/Waypoints/Waypoints.kmz", "input-waypoints.txt")
 	*/
 
-	regularStartEndFolder, optionalStartEndFolder, resupplyFolder, geographicFolder, importantFolder, waypointsFolder := d.getWaypointFolders()
+	legacy := &LegacyRenameHolder{update: false}
+
+	regularStartEndFolder, optionalStartEndFolder, resupplyFolder, geographicFolder, importantFolder, waypointsFolder := d.getWaypointFolders(legacy)
 
 	all := kml.Root{
 		Xmlns: "http://www.opengis.net/kml/2.2",

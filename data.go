@@ -139,6 +139,7 @@ func (d *Data) Normalise() error {
 type Waypoint struct {
 	geo.Pos
 	Name   string
+	Legacy string
 	Folder string
 }
 
