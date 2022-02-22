@@ -25,7 +25,7 @@ Download the binary from the [releases page](https://github.com/dave/gpt/release
 
 ## Usage
 
-Create an empty directory, and copy `All Tracks.kmz` and `All Points.kmz` into it. 
+Create an empty directory, and copy `GPT Master.kmz` into it. This file is included in [the track files zip](https://www.wikiexplora.com/Greater_Patagonian_Trail#The_GPT_Track_Files).
 
 Run the `gpt` command in that directory. 
 
