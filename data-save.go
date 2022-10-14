@@ -645,6 +645,24 @@ func (d *Data) SaveGpx(dpath string, stamp string) error {
 				return s.Experimental && s.Code == "RH" && s.Verification == "V"
 			},
 		},
+		{
+			path: []string{"Exploration Hiking Tracks", "Regular Tracks", "EXP-RR-LD-A.gpx"},
+			match: func(s *Segment) bool {
+				return s.Experimental && s.Code == "RR" && s.Verification == "A"
+			},
+		},
+		{
+			path: []string{"Exploration Hiking Tracks", "Regular Tracks", "EXP-RR-LD-I.gpx"},
+			match: func(s *Segment) bool {
+				return s.Experimental && s.Code == "RR" && s.Verification == "I"
+			},
+		},
+		{
+			path: []string{"Exploration Hiking Tracks", "Regular Tracks", "EXP-RR-LD-V.gpx"},
+			match: func(s *Segment) bool {
+				return s.Experimental && s.Code == "RR" && s.Verification == "V"
+			},
+		},
 
 		{
 			path: []string{"Exploration Packrafting Tracks", "Optional Tracks", "EXP-OH-LD-A.gpx"},
@@ -742,6 +760,36 @@ func (d *Data) SaveGpx(dpath string, stamp string) error {
 			path: []string{"Exploration Packrafting Tracks", "Regular Tracks", "EXP-RP-WR-2.gpx"},
 			match: func(s *Segment) bool {
 				return s.Experimental && s.Code == "RP" && s.Directional == "2"
+			},
+		},
+		{
+			path: []string{"Exploration Packrafting Tracks", "Regular Tracks", "EXP-RR-LD-A.gpx"},
+			match: func(s *Segment) bool {
+				return s.Experimental && s.Code == "RR" && s.Verification == "A"
+			},
+		},
+		{
+			path: []string{"Exploration Packrafting Tracks", "Regular Tracks", "EXP-RR-LD-I.gpx"},
+			match: func(s *Segment) bool {
+				return s.Experimental && s.Code == "RR" && s.Verification == "I"
+			},
+		},
+		{
+			path: []string{"Exploration Packrafting Tracks", "Regular Tracks", "EXP-RR-LD-V.gpx"},
+			match: func(s *Segment) bool {
+				return s.Experimental && s.Code == "RR" && s.Verification == "V"
+			},
+		},
+		{
+			path: []string{"Exploration Packrafting Tracks", "Regular Tracks", "EXP-RR-WR-1.gpx"},
+			match: func(s *Segment) bool {
+				return s.Experimental && s.Code == "RR" && s.Directional == "1"
+			},
+		},
+		{
+			path: []string{"Exploration Packrafting Tracks", "Regular Tracks", "EXP-RR-WR-2.gpx"},
+			match: func(s *Segment) bool {
+				return s.Experimental && s.Code == "RR" && s.Directional == "2"
 			},
 		},
 
