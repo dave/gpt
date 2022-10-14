@@ -175,6 +175,7 @@ type Placemark struct {
 	Point         *Point         `xml:"Point,omitempty"`
 	LineString    *LineString    `xml:"LineString,omitempty"`
 	MultiGeometry *MultiGeometry `xml:"MultiGeometry,omitempty"`
+	Polygon       *Polygon       `xml:"Polygon,omitempty"`
 	Style         *Style         `xml:"Style"`
 	Legacy        string         `xml:"legacy,attr,omitempty"`
 }
@@ -210,6 +211,18 @@ type MultiGeometry struct {
 	LineStrings []*LineString `xml:"LineString"`
 }
 
+type Polygon struct {
+	OuterBoundaryIs *OuterBoundaryIs `xml:"outerBoundaryIs"`
+}
+
+type OuterBoundaryIs struct {
+	LinearRing *LinearRing `xml:"LinearRing"`
+}
+
+type LinearRing struct {
+	Coordinates string `xml:"coordinates"`
+}
+
 func (l LineString) Line() geo.Line {
 	points := strings.Split(strings.TrimSpace(l.Coordinates), " ")
 	line := make(geo.Line, len(points))
@@ -222,6 +235,20 @@ func (l LineString) Line() geo.Line {
 		line[i] = p
 	}
 	return line
+}
+
+func AreaCoordinates(minLat, maxLat, minLon, maxLon float64) string {
+	var sb strings.Builder
+	sb.WriteString(PosCoordinates(geo.Pos{Lat: minLat, Lon: minLon}))
+	sb.WriteString(" ")
+	sb.WriteString(PosCoordinates(geo.Pos{Lat: minLat, Lon: maxLon}))
+	sb.WriteString(" ")
+	sb.WriteString(PosCoordinates(geo.Pos{Lat: maxLat, Lon: maxLon}))
+	sb.WriteString(" ")
+	sb.WriteString(PosCoordinates(geo.Pos{Lat: maxLat, Lon: minLon}))
+	sb.WriteString(" ")
+	sb.WriteString(PosCoordinates(geo.Pos{Lat: minLat, Lon: minLon}))
+	return sb.String()
 }
 
 func LineCoordinates(line geo.Line) string {

@@ -3,8 +3,10 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
+	"math"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/dave/gpt/geo"
@@ -107,10 +109,11 @@ func (d *Data) SaveMaster(dpath string, updateLegacy bool) error {
 				}
 				for _, segment := range route.All {
 					routeFolder.Placemarks = append(routeFolder.Placemarks, &kml.Placemark{
-						Name:     segment.PlacemarkName(),
-						Legacy:   legacy.segment(segment.Legacy, segment.PlacemarkName()),
-						Open:     1,
-						StyleUrl: fmt.Sprintf("#%s", segment.Style()),
+						Name:       segment.PlacemarkName(),
+						Legacy:     legacy.segment(segment.Legacy, segment.PlacemarkName()),
+						Visibility: 1,
+						Open:       0,
+						StyleUrl:   fmt.Sprintf("#%s", segment.Style()),
 						LineString: &kml.LineString{
 							Tessellate:  true,
 							Coordinates: kml.LineCoordinates(segment.Line),
@@ -195,10 +198,12 @@ func (d *Data) getWaypointFolders(legacy *LegacyRenameHolder) (regularStartEndFo
 		var placemarks []*kml.Placemark
 		for _, w := range waypoints {
 			placemarks = append(placemarks, &kml.Placemark{
-				StyleUrl: style,
-				Name:     w.Name,
-				Legacy:   legacy.waypoint(w.Legacy, w.Name),
-				Point:    kml.PosPoint(w.Pos),
+				Visibility: 1,
+				Open:       0,
+				StyleUrl:   style,
+				Name:       w.Name,
+				Legacy:     legacy.waypoint(w.Legacy, w.Name),
+				Point:      kml.PosPoint(w.Pos),
 			})
 		}
 		return placemarks
@@ -259,39 +264,51 @@ func (d *Data) getWaypointFolders(legacy *LegacyRenameHolder) (regularStartEndFo
 			if route.Modes[RAFT] != nil && route.Modes[HIKE] != nil && !route.Modes[RAFT].Segments[0].Line.Start().IsClose(route.Modes[HIKE].Segments[0].Line.Start(), DELTA) {
 				// needs separate points for hiking and packrafting
 				folder.Placemarks = append(folder.Placemarks, &kml.Placemark{
-					StyleUrl: fmt.Sprintf("#go"),
-					Name:     fmt.Sprintf(nameFormat, " hiking") + " start",
-					Point:    kml.PosPoint(route.Modes[HIKE].Segments[0].Line.Start()),
+					Visibility: 1,
+					Open:       0,
+					StyleUrl:   fmt.Sprintf("#go"),
+					Name:       fmt.Sprintf(nameFormat, " hiking") + " start",
+					Point:      kml.PosPoint(route.Modes[HIKE].Segments[0].Line.Start()),
 				})
 				folder.Placemarks = append(folder.Placemarks, &kml.Placemark{
-					StyleUrl: fmt.Sprintf("#go"),
-					Name:     fmt.Sprintf(nameFormat, " packrafting") + " start",
-					Point:    kml.PosPoint(route.Modes[RAFT].Segments[0].Line.Start()),
+					Visibility: 1,
+					Open:       0,
+					StyleUrl:   fmt.Sprintf("#go"),
+					Name:       fmt.Sprintf(nameFormat, " packrafting") + " start",
+					Point:      kml.PosPoint(route.Modes[RAFT].Segments[0].Line.Start()),
 				})
 			} else {
 				folder.Placemarks = append(folder.Placemarks, &kml.Placemark{
-					StyleUrl: fmt.Sprintf("#go"),
-					Name:     fmt.Sprintf(nameFormat, "") + " start",
-					Point:    kml.PosPoint(route.All[0].Line.Start()),
+					Visibility: 1,
+					Open:       0,
+					StyleUrl:   fmt.Sprintf("#go"),
+					Name:       fmt.Sprintf(nameFormat, "") + " start",
+					Point:      kml.PosPoint(route.All[0].Line.Start()),
 				})
 			}
 			if route.Modes[RAFT] != nil && route.Modes[HIKE] != nil && !route.Modes[RAFT].Segments[len(route.Modes[RAFT].Segments)-1].Line.End().IsClose(route.Modes[HIKE].Segments[len(route.Modes[HIKE].Segments)-1].Line.End(), DELTA) {
 				// needs separate points for hiking and packrafting
 				folder.Placemarks = append(folder.Placemarks, &kml.Placemark{
-					StyleUrl: fmt.Sprintf("#grn-square"),
-					Name:     fmt.Sprintf(nameFormat, " hiking") + " end",
-					Point:    kml.PosPoint(route.Modes[HIKE].Segments[len(route.Modes[HIKE].Segments)-1].Line.End()),
+					Visibility: 1,
+					Open:       0,
+					StyleUrl:   fmt.Sprintf("#grn-square"),
+					Name:       fmt.Sprintf(nameFormat, " hiking") + " end",
+					Point:      kml.PosPoint(route.Modes[HIKE].Segments[len(route.Modes[HIKE].Segments)-1].Line.End()),
 				})
 				folder.Placemarks = append(folder.Placemarks, &kml.Placemark{
-					StyleUrl: fmt.Sprintf("#grn-square"),
-					Name:     fmt.Sprintf(nameFormat, " packrafting") + " end",
-					Point:    kml.PosPoint(route.Modes[RAFT].Segments[len(route.Modes[RAFT].Segments)-1].Line.End()),
+					Visibility: 1,
+					Open:       0,
+					StyleUrl:   fmt.Sprintf("#grn-square"),
+					Name:       fmt.Sprintf(nameFormat, " packrafting") + " end",
+					Point:      kml.PosPoint(route.Modes[RAFT].Segments[len(route.Modes[RAFT].Segments)-1].Line.End()),
 				})
 			} else {
 				folder.Placemarks = append(folder.Placemarks, &kml.Placemark{
-					StyleUrl: fmt.Sprintf("#grn-square"),
-					Name:     fmt.Sprintf(nameFormat, "") + " end",
-					Point:    kml.PosPoint(route.All[len(route.All)-1].Line.End()),
+					Visibility: 1,
+					Open:       0,
+					StyleUrl:   fmt.Sprintf("#grn-square"),
+					Name:       fmt.Sprintf(nameFormat, "") + " end",
+					Point:      kml.PosPoint(route.All[len(route.All)-1].Line.End()),
 				})
 			}
 		}
@@ -312,10 +329,12 @@ func (d *Data) getWaypointFolders(legacy *LegacyRenameHolder) (regularStartEndFo
 		for _, w := range section.Waypoints {
 			if w.Folder == "" {
 				sectionFolder.Placemarks = append(sectionFolder.Placemarks, &kml.Placemark{
-					StyleUrl: "#ylw-blank",
-					Name:     w.Name,
-					Legacy:   legacy.waypoint(w.Legacy, w.Name),
-					Point:    kml.PosPoint(w.Pos),
+					Visibility: 1,
+					Open:       0,
+					StyleUrl:   "#ylw-blank",
+					Name:       w.Name,
+					Legacy:     legacy.waypoint(w.Legacy, w.Name),
+					Point:      kml.PosPoint(w.Pos),
 				})
 			} else {
 				if subfolders[w.Folder] == nil {
@@ -326,10 +345,12 @@ func (d *Data) getWaypointFolders(legacy *LegacyRenameHolder) (regularStartEndFo
 					sectionFolder.Folders = append(sectionFolder.Folders, f)
 				}
 				subfolders[w.Folder].Placemarks = append(subfolders[w.Folder].Placemarks, &kml.Placemark{
-					StyleUrl: "#ylw-blank",
-					Name:     w.Name,
-					Legacy:   legacy.waypoint(w.Legacy, w.Name),
-					Point:    kml.PosPoint(w.Pos),
+					Visibility: 1,
+					Open:       0,
+					StyleUrl:   "#ylw-blank",
+					Name:       w.Name,
+					Legacy:     legacy.waypoint(w.Legacy, w.Name),
+					Point:      kml.PosPoint(w.Pos),
 				})
 			}
 		}
@@ -402,12 +423,23 @@ func (d *Data) SaveKmlWaypoints(dpath string, stamp string) error {
 	regStart := kml.Root{
 		Xmlns: "http://www.opengis.net/kml/2.2",
 		Document: kml.Document{
-			Name:    "Section Start Points.kmz",
-			Folders: []*kml.Folder{regularStartEndFolder, optionalStartEndFolder},
+			Name:    "Section Start Points (regular).kmz",
+			Folders: []*kml.Folder{regularStartEndFolder},
 		},
 	}
-	if err := regStart.Save(filepath.Join(dpath, "KMZ File (For Google Earth and Smartphones)", "Waypoints", "Section Start Points.kmz")); err != nil {
-		return fmt.Errorf("saving Section Start Points.kmz: %w", err)
+	if err := regStart.Save(filepath.Join(dpath, "KMZ File (For Google Earth and Smartphones)", "Waypoints", "Section Start Points (regular).kmz")); err != nil {
+		return fmt.Errorf("saving Section Start Points (regular).kmz: %w", err)
+	}
+
+	optStart := kml.Root{
+		Xmlns: "http://www.opengis.net/kml/2.2",
+		Document: kml.Document{
+			Name:    "Section Start Points (optional).kmz",
+			Folders: []*kml.Folder{optionalStartEndFolder},
+		},
+	}
+	if err := optStart.Save(filepath.Join(dpath, "KMZ File (For Google Earth and Smartphones)", "Waypoints", "Section Start Points (optional).kmz")); err != nil {
+		return fmt.Errorf("saving Section Start Points (optional).kmz: %w", err)
 	}
 
 	way := kml.Root{
@@ -517,8 +549,10 @@ func (d *Data) SaveKmlTracks(dpath string, stamp string) error {
 				}
 				for _, segment := range route.All {
 					trackFolder.Placemarks = append(trackFolder.Placemarks, &kml.Placemark{
-						Name:     segment.PlacemarkName(),
-						StyleUrl: fmt.Sprintf("#%s", segment.Style()),
+						Visibility: 1,
+						Open:       0,
+						Name:       segment.PlacemarkName(),
+						StyleUrl:   fmt.Sprintf("#%s", segment.Style()),
 						LineString: &kml.LineString{
 							Tessellate:  true,
 							Coordinates: kml.LineCoordinates(segment.Line),
@@ -1189,25 +1223,62 @@ func (d *Data) SaveGpx(dpath string, stamp string) error {
 
 func (d *Data) SaveGaia(dpath string) error {
 	logln("saving gaia files")
-	type clusterStruct struct {
-		name     string
-		from, to int
-		modes    map[ModeType]map[string]*gpx.Root
+	type groupStruct struct {
+		letter, name string
+		from, to     int
 	}
-	newContents := func() map[string]*gpx.Root {
-		return map[string]*gpx.Root{"routes": {}, "options": {}, "routes-markers": {}, "options-markers": {}, "waypoints": {}}
+	type clusterStruct struct {
+		name                                                      string
+		from, to                                                  int
+		modes                                                     map[ModeType]map[string]*gpx.Root
+		routes, waypoints, options, routesMarkers, optionsMarkers bool
 	}
 	newModes := func() map[ModeType]map[string]*gpx.Root {
-		return map[ModeType]map[string]*gpx.Root{HIKE: newContents(), RAFT: newContents()}
+		return map[ModeType]map[string]*gpx.Root{
+			HIKE: {"routes": {}, "options": {}, "routes-markers": {}, "options-markers": {}, "waypoints": {}},
+			RAFT: {"routes": {}, "options": {}, "routes-markers": {}, "options-markers": {}, "waypoints": {}},
+		}
+	}
+	groups := []groupStruct{
+		{letter: "A", name: "Precordillera", from: 1, to: 4},
+		{letter: "B", name: "Arrieros", from: 5, to: 9},
+		{letter: "C", name: "Pehuenche", from: 10, to: 16},
+		{letter: "D", name: "Lagos Chilenos", from: 17, to: 22},
+		{letter: "E", name: "Lagos Argentinos", from: 23, to: 26},
+		{letter: "F", name: "Sector Palena", from: 27, to: 28},
+		{letter: "G", name: "Aysen Norte", from: 29, to: 31},
+		{letter: "H", name: "Aysen Sur", from: 32, to: 37},
+		{letter: "I", name: "Campo de Hielo Sur 1", from: 38, to: 40},
+		{letter: "J", name: "Campo de Hielo Sur 2", from: 41, to: 46},
+		{letter: "K", name: "Magallanes", from: 47, to: 50},
+		{letter: "L", name: "Tierra del Fuego", from: 60, to: 69},
+		{letter: "M", name: "Sector Yelcho", from: 70, to: 75},
+		{letter: "N", name: "Fiordos Norte", from: 76, to: 78},
+		{letter: "O", name: "Campo de Hielo Norte", from: 80, to: 83},
+		{letter: "P", name: "Fjordos Sur", from: 90, to: 92},
 	}
 	clusters := []clusterStruct{
-		{name: "main-north", from: 1, to: 16, modes: newModes()},
-		{name: "main-south", from: 17, to: 40, modes: newModes()},
-		{name: "extensions-south", from: 41, to: 69, modes: newModes()},
-		{name: "extensions-west", from: 72, to: 99, modes: newModes()},
-		{name: "all", from: 1, to: 99, modes: newModes()},
+		{
+			name:   "",
+			from:   1,
+			to:     99,
+			modes:  newModes(),
+			routes: true, waypoints: true, options: false, routesMarkers: false, optionsMarkers: false,
+		},
+		//{name: "main-north", from: 1, to: 16, modes: newModes()},
+		//{name: "main-south", from: 17, to: 40, modes: newModes()},
+		//{name: "extensions-south", from: 41, to: 69, modes: newModes()},
+		//{name: "extensions-west", from: 72, to: 99, modes: newModes()},
 	}
-
+	for _, group := range groups {
+		clusters = append(clusters, clusterStruct{
+			name:   fmt.Sprintf("Group %s (GPT%02d-GPT%02d) %s", group.letter, group.from, group.to, group.name),
+			from:   group.from,
+			to:     group.to,
+			modes:  newModes(),
+			routes: false, waypoints: false, options: true, routesMarkers: true, optionsMarkers: true,
+		})
+	}
 	for _, cluster := range clusters {
 
 		count := map[ModeType][]*Section{}
@@ -1224,6 +1295,12 @@ func (d *Data) SaveGaia(dpath string) error {
 				continue
 			}
 			for mode, contents := range cluster.modes {
+				// TODO: skip if mode != section type (e.g. packrafting != hiking)
+				if section.Key.Suffix == "H" && mode == RAFT || section.Key.Suffix == "P" && mode == HIKE {
+					// TODO: check this!
+					continue
+				}
+
 				count[mode] = append(count[mode], section)
 
 				for _, routeKey := range section.RouteKeys {
@@ -1388,15 +1465,53 @@ func (d *Data) SaveGaia(dpath string) error {
 	for _, cluster := range clusters {
 		for mode, modeMap := range cluster.modes {
 			for contents, root := range modeMap {
-				var modeString string
-				if mode == HIKE {
+				var modeString, contentsString string
+				var output, markers, options bool
+				switch mode {
+				case HIKE:
 					modeString = "hiking"
-				} else {
+				default:
 					modeString = "packrafting"
 				}
-				name := fmt.Sprintf("%s-%s-%s.gpx", cluster.name, modeString, contents)
-				if err := root.Save(filepath.Join(dpath, "GPX Files (For Gaia GPS app)", name)); err != nil {
-					return fmt.Errorf("writing gpx")
+				switch contents {
+				case "routes":
+					output = cluster.routes
+					contentsString = "routes"
+				case "options":
+					options = true
+					output = cluster.options
+					contentsString = "options"
+				case "routes-markers":
+					markers = true
+					output = cluster.routesMarkers
+					contentsString = "routes markers"
+				case "options-markers":
+					markers = true
+					output = cluster.optionsMarkers
+					contentsString = "options markers"
+				case "waypoints":
+					output = cluster.waypoints
+					contentsString = "waypoints"
+				}
+				if output {
+					var fname string
+					if cluster.name == "" {
+						fname = fmt.Sprintf("%s (%s).gpx", strings.Title(contentsString), modeString)
+					} else {
+						fname = fmt.Sprintf("%s - %s %s.gpx", cluster.name, modeString, contentsString)
+					}
+					dir := "GPX Files (For Gaia GPS app)"
+					var fpath string
+					if markers {
+						fpath = filepath.Join(dpath, dir, "Markers", fname)
+					} else if options {
+						fpath = filepath.Join(dpath, dir, "Options", fname)
+					} else {
+						fpath = filepath.Join(dpath, dir, fname)
+					}
+					if err := root.Save(fpath); err != nil {
+						return fmt.Errorf("writing gpx")
+					}
 				}
 			}
 		}
@@ -1411,14 +1526,97 @@ func (d *Data) SaveGaia(dpath string) error {
 		}
 		return root.Save(filepath.Join(dpath, "GPX Files (For Gaia GPS app)", name))
 	}
-	if err := wp(d.Resupplies, "waypoints-resupplies.gpx", "Resupply: "); err != nil {
+	if err := wp(d.Resupplies, "Waypoints (resupplies).gpx", "Resupply: "); err != nil {
 		return fmt.Errorf("writing resupplies gpx: %w", err)
 	}
-	if err := wp(d.Important, "waypoints-important.gpx", "Important: "); err != nil {
+	if err := wp(d.Important, "Waypoints (important).gpx", "Important: "); err != nil {
 		return fmt.Errorf("writing important gpx: %w", err)
 	}
-	if err := wp(d.Geographic, "waypoints-geographic.gpx", ""); err != nil {
+	if err := wp(d.Geographic, "Waypoints (geographic).gpx", ""); err != nil {
 		return fmt.Errorf("writing important gpx: %w", err)
+	}
+
+	// AREAS
+	{
+		areaResolution := 0.7 // medium
+		//areaResolution := 3.0
+		areas := map[geo.Pos]bool{}
+		round := func(number float64) float64 {
+			return math.Floor(number/areaResolution) * areaResolution
+		}
+		markSingle := func(pos geo.Pos) {
+			roundedLat, roundedLon := round(pos.Lat), round(pos.Lon)
+			areas[geo.Pos{Lat: roundedLat, Lon: roundedLon}] = true
+		}
+		mark := func(pos geo.Pos) {
+			markSingle(geo.Pos{Lat: pos.Lat, Lon: pos.Lon})
+			markSingle(geo.Pos{Lat: pos.Lat, Lon: pos.Lon + areaResolution/2})
+			markSingle(geo.Pos{Lat: pos.Lat, Lon: pos.Lon - areaResolution/2})
+			markSingle(geo.Pos{Lat: pos.Lat + areaResolution/2, Lon: pos.Lon})
+			markSingle(geo.Pos{Lat: pos.Lat + areaResolution/2, Lon: pos.Lon + areaResolution/2})
+			markSingle(geo.Pos{Lat: pos.Lat + areaResolution/2, Lon: pos.Lon - areaResolution/2})
+			markSingle(geo.Pos{Lat: pos.Lat - areaResolution/2, Lon: pos.Lon})
+			markSingle(geo.Pos{Lat: pos.Lat - areaResolution/2, Lon: pos.Lon + areaResolution/2})
+			markSingle(geo.Pos{Lat: pos.Lat - areaResolution/2, Lon: pos.Lon - areaResolution/2})
+		}
+
+		var areasPlacemarks []*kml.Placemark
+		for _, key := range d.Keys {
+			if HAS_SINGLE && key != SINGLE {
+				continue
+			}
+
+			section := d.Sections[key]
+			for _, route := range section.Routes {
+				for _, segment := range route.All {
+					for _, pos := range segment.Line {
+						mark(pos)
+					}
+				}
+			}
+		}
+		var areasSlice []geo.Pos
+		for pos := range areas {
+			areasSlice = append(areasSlice, pos)
+		}
+		sort.Slice(areasSlice, func(i, j int) bool {
+			if areasSlice[i].Lat != areasSlice[j].Lat {
+				return areasSlice[i].Lat > areasSlice[j].Lat
+			} else {
+				return areasSlice[i].Lon < areasSlice[j].Lon
+			}
+		})
+
+		fmt.Println(len(areasSlice))
+		for i, pos := range areasSlice {
+			areasPlacemarks = append(areasPlacemarks, &kml.Placemark{
+				Visibility: 1,
+				Open:       0,
+				Name:       fmt.Sprintf("Area %03d/%03d", i+1, len(areasSlice)),
+				Polygon: &kml.Polygon{
+					OuterBoundaryIs: &kml.OuterBoundaryIs{
+						LinearRing: &kml.LinearRing{
+							Coordinates: kml.AreaCoordinates(pos.Lat, pos.Lat+areaResolution, pos.Lon, pos.Lon+areaResolution),
+						},
+					},
+				},
+			})
+		}
+		areasKml := kml.Root{
+			Xmlns: "http://www.opengis.net/kml/2.2",
+			Document: kml.Document{
+				Name: "Areas.kmz",
+				Folders: []*kml.Folder{
+					{
+						Name:       "Areas",
+						Placemarks: areasPlacemarks,
+					},
+				},
+			},
+		}
+		if err := areasKml.Save(filepath.Join(dpath, "GPX Files (For Gaia GPS app)", "Areas.kmz")); err != nil {
+			return fmt.Errorf("writing areas kml: %w", err)
+		}
 	}
 
 	//if false {
@@ -1467,14 +1665,14 @@ func (d *Data) SaveGaia(dpath string) error {
 	//				}
 	//				f.Placemarks = append(f.Placemarks, &kml.Placemark{
 	//					Name:       name,
-	//					Visibility: 0,
+	//					Visibility: 1,
 	//					Open:       0,
 	//					Point:      kml.PosPoint(n.Entry.Line.Start()),
 	//				})
 	//
 	//				net := &kml.Placemark{
 	//					Name:          n.String(),
-	//					Visibility:    0,
+	//					Visibility:    1,
 	//					Open:          0,
 	//					MultiGeometry: &kml.MultiGeometry{},
 	//					Style: &kml.Style{LineStyle: &kml.LineStyle{
@@ -1527,6 +1725,8 @@ func (d *Data) SaveGaia(dpath string) error {
 	//}
 	return nil
 }
+
+var wpts = map[string]int{}
 
 const Nomenclature = `EXP: Exploration Route
 

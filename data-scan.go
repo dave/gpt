@@ -483,6 +483,9 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 				name := strings.TrimSpace(matches[3])
 				sectionKey := SectionKey{number, suffix}
 				section := d.Sections[sectionKey]
+				if section == nil {
+					continue
+				}
 				if name != section.Name {
 					return fmt.Errorf("waypoint section name mismatch in GPT%s %q and %q", section.Key.Code(), name, section.Name)
 				}
