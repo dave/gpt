@@ -1,6 +1,7 @@
 
 # don't forget to update VERSION in main.go
-# git tag x.y.z; and git push origin --tags; and goreleaser --rm-dist
+# go install github.com/goreleaser/goreleaser@latest
+# git tag vX.Y.Z; and git push origin --tags; and goreleaser --rm-dist
 
 # This is an example goreleaser.yaml file with some sane defaults.
 # Make sure to check the documentation at http://goreleaser.com
