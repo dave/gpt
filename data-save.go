@@ -1226,7 +1226,9 @@ func (d *Data) SaveGaia(dpath string) error {
 	// routes
 	{
 		for _, mode := range MODES {
-			root := &gpx.Root{}
+			root := &gpx.Paged{
+				Max: 1000,
+			}
 			for _, key := range d.Keys {
 				if HAS_SINGLE && key != SINGLE {
 					continue
@@ -1234,6 +1236,9 @@ func (d *Data) SaveGaia(dpath string) error {
 				section := d.Sections[key]
 				if section.Key.Suffix == "H" && mode == RAFT || section.Key.Suffix == "P" && mode == HIKE {
 					continue
+				}
+				bucket := &gpx.Bucket{
+					Order: section.Routes[section.RouteKeys[0]].All[0].Line.Start().Lat,
 				}
 				for _, routeKey := range section.RouteKeys {
 					if routeKey.Required != REGULAR {
@@ -1274,7 +1279,7 @@ func (d *Data) SaveGaia(dpath string) error {
 
 					rte.Points = gpx.LinePoints(geo.MergeLines(lines))
 					rte.Desc += section.Scraped[mode]
-					root.Routes = append(root.Routes, rte)
+					bucket.Routes = append(bucket.Routes, rte)
 
 					// start waypoint
 					if route.Modes[RAFT] != nil && route.Modes[HIKE] != nil && !route.Modes[RAFT].Segments[0].Line.Start().IsClose(route.Modes[HIKE].Segments[0].Line.Start(), DELTA) {
@@ -1284,31 +1289,32 @@ func (d *Data) SaveGaia(dpath string) error {
 								Point: gpx.PosPoint(route.Modes[HIKE].Segments[0].Line.Start()),
 								Name:  fmt.Sprintf("GPT%s%s %s", section.Key.Code(), route.Key.Direction, section.Name),
 							}
-							root.Waypoints = append(root.Waypoints, wp1)
+							bucket.Waypoints = append(bucket.Waypoints, wp1)
 						} else {
 							wp2 := gpx.Waypoint{
 								Point: gpx.PosPoint(route.Modes[RAFT].Segments[0].Line.Start()),
 								Name:  fmt.Sprintf("GPT%s%s %s", section.Key.Code(), route.Key.Direction, section.Name),
 							}
-							root.Waypoints = append(root.Waypoints, wp2)
+							bucket.Waypoints = append(bucket.Waypoints, wp2)
 						}
 					} else {
 						wp := gpx.Waypoint{
 							Point: gpx.PosPoint(route.All[0].Line.Start()),
 							Name:  fmt.Sprintf("GPT%s%s %s", section.Key.Code(), route.Key.Direction, section.Name),
 						}
-						root.Waypoints = append(root.Waypoints, wp)
+						bucket.Waypoints = append(bucket.Waypoints, wp)
 					}
 				}
+				root.Buckets = append(root.Buckets, bucket)
 			}
 			var modeString string
 			switch mode {
 			case HIKE:
-				modeString = "hiking"
+				modeString = "Hiking"
 			case RAFT:
-				modeString = "packrafting"
+				modeString = "Packrafting"
 			}
-			if err := root.Save(filepath.Join(dpath, "GPX Files (For Gaia GPS app)", fmt.Sprintf("Routes (%s).gpx", modeString))); err != nil {
+			if err := root.Save(filepath.Join(dpath, "GPX Files (For Gaia GPS app)", fmt.Sprintf("%s routes.gpx", modeString))); err != nil {
 				return fmt.Errorf("writing routes (%s) gpx: %w", modeString, err)
 			}
 		}
@@ -1317,7 +1323,9 @@ func (d *Data) SaveGaia(dpath string) error {
 	// options
 	{
 		for _, mode := range MODES {
-			root := &gpx.Root{}
+			root := &gpx.Paged{
+				Max: 1000,
+			}
 			for _, key := range d.Keys {
 				if HAS_SINGLE && key != SINGLE {
 					continue
@@ -1325,6 +1333,9 @@ func (d *Data) SaveGaia(dpath string) error {
 				section := d.Sections[key]
 				if section.Key.Suffix == "H" && mode == RAFT || section.Key.Suffix == "P" && mode == HIKE {
 					continue
+				}
+				bucket := &gpx.Bucket{
+					Order: section.Routes[section.RouteKeys[0]].All[0].Line.Start().Lat,
 				}
 				for _, routeKey := range section.RouteKeys {
 					if routeKey.Required != OPTIONAL {
@@ -1373,17 +1384,18 @@ func (d *Data) SaveGaia(dpath string) error {
 					for _, segment := range routeMode.Segments {
 						trk.Segments = append(trk.Segments, gpx.TrackSegment{Points: gpx.LineTrackPoints(segment.Line)})
 					}
-					root.Tracks = append(root.Tracks, trk)
+					bucket.Tracks = append(bucket.Tracks, trk)
 				}
+				root.Buckets = append(root.Buckets, bucket)
 			}
 			var modeString string
 			switch mode {
 			case HIKE:
-				modeString = "hiking"
+				modeString = "Hiking"
 			case RAFT:
-				modeString = "packrafting"
+				modeString = "Packrafting"
 			}
-			if err := root.Save(filepath.Join(dpath, "GPX Files (For Gaia GPS app)", fmt.Sprintf("Options (%s).gpx", modeString))); err != nil {
+			if err := root.Save(filepath.Join(dpath, "GPX Files (For Gaia GPS app)", fmt.Sprintf("%s options.gpx", modeString))); err != nil {
 				return fmt.Errorf("writing options (%s) gpx: %w", modeString, err)
 			}
 		}
@@ -1391,17 +1403,23 @@ func (d *Data) SaveGaia(dpath string) error {
 
 	// waypoints
 	{
-		root := &gpx.Root{}
+		root := &gpx.Paged{
+			Max: 1000,
+		}
 		for _, key := range d.Keys {
 			if HAS_SINGLE && key != SINGLE {
 				continue
 			}
 			for _, w := range d.Sections[key].Waypoints {
-				root.Waypoints = append(root.Waypoints, gpx.Waypoint{
+				bucket := &gpx.Bucket{
+					Order: w.Pos.Lat,
+				}
+				bucket.Waypoints = append(bucket.Waypoints, gpx.Waypoint{
 					Point: gpx.PosPoint(w.Pos),
 					Name:  w.Name,
 					Desc:  "GPT" + key.Code(),
 				})
+				root.Buckets = append(root.Buckets, bucket)
 			}
 		}
 		if err := root.Save(filepath.Join(dpath, "GPX Files (For Gaia GPS app)", "Waypoints (routes).gpx")); err != nil {
@@ -1410,12 +1428,18 @@ func (d *Data) SaveGaia(dpath string) error {
 	}
 
 	wp := func(waypoints []Waypoint, name string, prefix string) error {
-		root := &gpx.Root{}
+		root := &gpx.Paged{
+			Max: 1000,
+		}
 		for _, w := range waypoints {
-			root.Waypoints = append(root.Waypoints, gpx.Waypoint{
+			bucket := &gpx.Bucket{
+				Order: w.Pos.Lat,
+			}
+			bucket.Waypoints = append(bucket.Waypoints, gpx.Waypoint{
 				Point: gpx.PosPoint(w.Pos),
 				Name:  prefix + w.Name,
 			})
+			root.Buckets = append(root.Buckets, bucket)
 		}
 		return root.Save(filepath.Join(dpath, "GPX Files (For Gaia GPS app)", name))
 	}

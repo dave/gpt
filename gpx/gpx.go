@@ -8,6 +8,8 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/dave/gpt/geo"
@@ -27,6 +29,61 @@ func Decode(reader io.Reader) (Root, error) {
 		return Root{}, fmt.Errorf("decoding gpx: %w", err)
 	}
 	return r, nil
+}
+
+// Paged is a helper for paginated GPX files. When saving, it will split the output over several files. Buckets of
+// items are kept together. Buckets are ordered.
+type Paged struct {
+	Version float64
+	Max     int
+	Buckets []*Bucket
+}
+
+func (p *Paged) Save(fpath string) error {
+	fpath = strings.TrimSuffix(fpath, ".gpx")
+	sort.Slice(p.Buckets, func(i, j int) bool { return p.Buckets[i].Order > p.Buckets[j].Order })
+	var roots []*Root
+	current := &Root{Version: p.Version}
+	currentItemCount := 0
+	for _, bucket := range p.Buckets {
+		if currentItemCount > 0 && currentItemCount+bucket.Items() > p.Max {
+			roots = append(roots, current)
+			current = &Root{Version: p.Version}
+			currentItemCount = 0
+		}
+		current.Waypoints = append(current.Waypoints, bucket.Waypoints...)
+		current.Routes = append(current.Routes, bucket.Routes...)
+		current.Tracks = append(current.Tracks, bucket.Tracks...)
+		currentItemCount += bucket.Items()
+	}
+	roots = append(roots, current)
+	for i, root := range roots {
+		var fpathi string
+		if i > 0 {
+			fpathi = fmt.Sprintf("%s [continued %d of %d].gpx", fpath, i, len(roots)-1)
+		} else {
+			fpathi = fmt.Sprintf("%s.gpx", fpath)
+		}
+		if err := root.Save(fpathi); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+type Bucket struct {
+	Order     float64
+	Waypoints []Waypoint
+	Tracks    []Track
+	Routes    []Route
+}
+
+func (b *Bucket) Items() int {
+	total := len(b.Waypoints) + len(b.Routes)
+	for _, track := range b.Tracks {
+		total += len(track.Segments)
+	}
+	return total
 }
 
 type Root struct {
