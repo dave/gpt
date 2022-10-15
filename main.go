@@ -46,6 +46,12 @@ func main() {
 
 func Main() error {
 
+	cacheDir := path.Join(os.Getenv("HOME"), fmt.Sprintf(".gpt-cache-%04d-%02d", time.Now().Year(), time.Now().Month()))
+	elevationCacheDir := path.Join(cacheDir, "elevations")
+	descriptionsCacheDir := path.Join(cacheDir, "descriptions")
+	_ = os.MkdirAll(elevationCacheDir, 0777)
+	_ = os.MkdirAll(descriptionsCacheDir, 0777)
+
 	input := flag.String("input", "./GPT Master.kmz", "input file")
 	logger := flag.Bool("log", true, "output logs")
 	debugger := flag.Bool("debug", false, "debug")
@@ -80,7 +86,7 @@ func Main() error {
 	if *ele {
 		log.SetOutput(ioutil.Discard)
 		var err error
-		SrtmClient, err = geoelevations.NewSrtmWithCustomCacheDir(http.DefaultClient, path.Join(os.Getenv("HOME"), ".geoelevations1"))
+		SrtmClient, err = geoelevations.NewSrtmWithCustomCacheDir(http.DefaultClient, elevationCacheDir)
 		if err != nil {
 			return fmt.Errorf("creating srtm client: %w", err)
 		}
@@ -99,7 +105,7 @@ func Main() error {
 
 	if *scrape {
 		logln("web scraping")
-		if err := data.Scrape(); err != nil {
+		if err := data.Scrape(descriptionsCacheDir); err != nil {
 			return fmt.Errorf("scraping web: %w", err)
 		}
 	}

@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 
@@ -20,10 +19,7 @@ const HEADING_SYMBOL = "●" //"◉" //"✪" //"●" //"★" //"⦿"
 const WAYPOINT_SYMBOL = "☉"
 const ROUTE_SYMBOL = "⬲" //"⛢"
 
-func (d *Data) Scrape() error {
-
-	cachedir := path.Join(os.Getenv("HOME"), ".gpt-cache")
-	_ = os.MkdirAll(cachedir, 0777)
+func (d *Data) Scrape(cachedir string) error {
 
 	for _, key := range d.Keys {
 		if HAS_SINGLE && key != SINGLE {
