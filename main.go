@@ -3,7 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -84,7 +84,7 @@ func Main() error {
 	}
 
 	if *ele {
-		log.SetOutput(ioutil.Discard)
+		log.SetOutput(io.Discard)
 		var err error
 		SrtmClient, err = geoelevations.NewSrtmWithCustomCacheDir(http.DefaultClient, elevationCacheDir)
 		if err != nil {

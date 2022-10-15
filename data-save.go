@@ -1228,15 +1228,15 @@ func (d *Data) SaveGaia(dpath string) error {
 		from, to     int
 	}
 	type clusterStruct struct {
-		name                                                      string
-		from, to                                                  int
-		modes                                                     map[ModeType]map[string]*gpx.Root
-		routes, waypoints, options, routesMarkers, optionsMarkers bool
+		name                       string
+		from, to                   int
+		modes                      map[ModeType]map[string]*gpx.Root
+		routes, waypoints, options bool
 	}
 	newModes := func() map[ModeType]map[string]*gpx.Root {
 		return map[ModeType]map[string]*gpx.Root{
-			HIKE: {"routes": {}, "options": {}, "routes-markers": {}, "options-markers": {}, "waypoints": {}},
-			RAFT: {"routes": {}, "options": {}, "routes-markers": {}, "options-markers": {}, "waypoints": {}},
+			HIKE: {"routes": {}, "options": {}, "waypoints": {}},
+			RAFT: {"routes": {}, "options": {}, "waypoints": {}},
 		}
 	}
 	groups := []groupStruct{
@@ -1263,7 +1263,7 @@ func (d *Data) SaveGaia(dpath string) error {
 			from:   1,
 			to:     99,
 			modes:  newModes(),
-			routes: true, waypoints: true, options: false, routesMarkers: false, optionsMarkers: false,
+			routes: true, waypoints: true, options: false,
 		},
 		//{name: "main-north", from: 1, to: 16, modes: newModes()},
 		//{name: "main-south", from: 17, to: 40, modes: newModes()},
@@ -1276,7 +1276,7 @@ func (d *Data) SaveGaia(dpath string) error {
 			from:   group.from,
 			to:     group.to,
 			modes:  newModes(),
-			routes: false, waypoints: false, options: true, routesMarkers: true, optionsMarkers: true,
+			routes: false, waypoints: false, options: true,
 		})
 	}
 	for _, cluster := range clusters {
@@ -1337,12 +1337,6 @@ func (d *Data) SaveGaia(dpath string) error {
 						for _, flush := range straight.Flushes {
 							id++
 							rte.Desc += flush.Description(id, false) + "\n"
-							wp := gpx.Waypoint{
-								Point: gpx.PosPoint(flush.Segments[0].Line.Start()),
-								Name:  flush.Description(id, true),
-								Desc:  rte.Name,
-							}
-							contents["routes-markers"].Waypoints = append(contents["routes-markers"].Waypoints, wp)
 						}
 					}
 
@@ -1395,12 +1389,6 @@ func (d *Data) SaveGaia(dpath string) error {
 						for _, flush := range straight.Flushes {
 							id++
 							trk.Desc += flush.Description(id, false) + "\n"
-							wp := gpx.Waypoint{
-								Point: gpx.PosPoint(flush.Segments[0].Line.Start()),
-								Name:  flush.Description(id, true),
-								Desc:  trk.Name,
-							}
-							contents["options-markers"].Waypoints = append(contents["options-markers"].Waypoints, wp)
 						}
 					}
 
@@ -1466,7 +1454,7 @@ func (d *Data) SaveGaia(dpath string) error {
 		for mode, modeMap := range cluster.modes {
 			for contents, root := range modeMap {
 				var modeString, contentsString string
-				var output, markers, options bool
+				var output, options bool
 				switch mode {
 				case HIKE:
 					modeString = "hiking"
@@ -1481,14 +1469,6 @@ func (d *Data) SaveGaia(dpath string) error {
 					options = true
 					output = cluster.options
 					contentsString = "options"
-				case "routes-markers":
-					markers = true
-					output = cluster.routesMarkers
-					contentsString = "routes markers"
-				case "options-markers":
-					markers = true
-					output = cluster.optionsMarkers
-					contentsString = "options markers"
 				case "waypoints":
 					output = cluster.waypoints
 					contentsString = "waypoints"
@@ -1502,10 +1482,12 @@ func (d *Data) SaveGaia(dpath string) error {
 					}
 					dir := "GPX Files (For Gaia GPS app)"
 					var fpath string
-					if markers {
-						fpath = filepath.Join(dpath, dir, "Markers", fname)
-					} else if options {
-						fpath = filepath.Join(dpath, dir, "Options", fname)
+					if options {
+						if mode == HIKE {
+							fpath = filepath.Join(dpath, dir, "Options (hiking)", fname)
+						} else {
+							fpath = filepath.Join(dpath, dir, "Options (packrafting)", fname)
+						}
 					} else {
 						fpath = filepath.Join(dpath, dir, fname)
 					}
@@ -1587,7 +1569,6 @@ func (d *Data) SaveGaia(dpath string) error {
 			}
 		})
 
-		fmt.Println(len(areasSlice))
 		for i, pos := range areasSlice {
 			areasPlacemarks = append(areasPlacemarks, &kml.Placemark{
 				Visibility: 1,
