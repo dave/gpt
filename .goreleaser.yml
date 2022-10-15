@@ -1,7 +1,14 @@
 
 # don't forget to update VERSION in main.go
-# go install github.com/goreleaser/goreleaser@latest
 # git tag vX.Y.Z; and git push origin --tags; and goreleaser --rm-dist
+
+# install goreleaser?
+# go install github.com/goreleaser/goreleaser@latest
+
+# need a new GH token?
+# https://github.com/settings/tokens/new - repo, write:packages
+# sudo pico ~/.config/fish/config.fish
+# GITHUB_TOKEN env var
 
 # This is an example goreleaser.yaml file with some sane defaults.
 # Make sure to check the documentation at http://goreleaser.com
