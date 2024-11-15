@@ -1,6 +1,6 @@
 
 # don't forget to update VERSION in main.go
-# git tag vX.Y.Z; and git push origin --tags; and goreleaser --rm-dist
+# git tag vX.Y.Z; and git push origin --tags; and goreleaser --clean
 
 # install goreleaser?
 # go install github.com/goreleaser/goreleaser@latest
@@ -23,13 +23,6 @@ builds:
       - linux
       - windows
       - darwin
-archives:
-- replacements:
-    darwin: Darwin
-    linux: Linux
-    windows: Windows
-    386: i386
-    amd64: x86_64
 checksum:
   name_template: 'checksums.txt'
 snapshot:
