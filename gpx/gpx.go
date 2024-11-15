@@ -59,8 +59,8 @@ func (p *Paged) Save(fpath string) error {
 	roots = append(roots, current)
 	for i, root := range roots {
 		var fpathi string
-		if i > 0 {
-			fpathi = fmt.Sprintf("%s [continued %d of %d].gpx", fpath, i, len(roots)-1)
+		if len(roots) > 1 {
+			fpathi = fmt.Sprintf("%s [%d of %d].gpx", fpath, i+1, len(roots))
 		} else {
 			fpathi = fmt.Sprintf("%s.gpx", fpath)
 		}
