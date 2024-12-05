@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"html"
 	"net/http"
 	"regexp"
 	"sort"
@@ -26,6 +27,22 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 	folders := inputRoot.Document.Folders
 	if len(folders) == 1 && folders[0].Name == "GPT Master" {
 		folders = folders[0].Folders
+	}
+
+	var fixFolder func(folder *kml.Folder)
+	fixFolder = func(folder *kml.Folder) {
+		for i, placemark := range folder.Placemarks {
+			folder.Placemarks[i].Name = fixString(placemark.Name)
+			folder.Placemarks[i].Description = fixString(placemark.Description)
+			folder.Placemarks[i].StyleUrl = fixString(placemark.StyleUrl)
+			folder.Placemarks[i].Legacy = fixString(placemark.Legacy)
+		}
+		for _, inner := range folder.Folders {
+			fixFolder(inner)
+		}
+	}
+	for i, _ := range inputRoot.Document.Folders {
+		fixFolder(inputRoot.Document.Folders[i])
 	}
 
 	var tracksFolder, pointsFolder *kml.Folder
@@ -587,3 +604,15 @@ var optionFolderRegex = regexp.MustCompile(`Option ([0-9]+) ?(\((.*)\))?$`)
 var sectionFolderRegex = regexp.MustCompile(`^GPT([0-9]{2})([HP])? \((.*)\)$`)
 var segmentPlacemarkRegex = regexp.MustCompile(`^((EXP)-)?(RH|RP|RR|OH|OP)-(((BB|CC|MR|PR|TL|FJ|LK|RI|FY)&?)+)-?([VAI])?([12])? {.*} \[.*] ?(\((.*)\))?$`)
 var routeFolderRegex = regexp.MustCompile(`^([0-9]{2})?([A-Z]{1,2})?([a-z])? ?(\((.*)\))?$`)
+
+func fixString(input string) string {
+	decoded := input
+	for {
+		temp := html.UnescapeString(decoded)
+		if temp == decoded {
+			break
+		}
+		decoded = temp
+	}
+	return decoded
+}
