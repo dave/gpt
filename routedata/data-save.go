@@ -1,4 +1,4 @@
-package main
+package routedata
 
 import (
 	"fmt"
@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/dave/gpt/geo"
+	"github.com/dave/gpt/globals"
 	"github.com/dave/gpt/gpx"
 	"github.com/dave/gpt/kml"
 )
@@ -46,12 +47,12 @@ func (d *Data) SaveMaster(dpath string, updateLegacy bool) error {
 
 	tracksFolder := &kml.Folder{Name: "Tracks"}
 
-	for _, required := range REQUIRED_TYPES {
+	for _, required := range globals.REQUIRED_TYPES {
 		rootFolder := &kml.Folder{}
 		switch required {
-		case REGULAR:
+		case globals.REGULAR:
 			rootFolder.Name = "Regular Tracks"
-		case OPTIONAL:
+		case globals.OPTIONAL:
 			rootFolder.Name = "Optional Tracks"
 		}
 		tracksFolder.Folders = append(tracksFolder.Folders, rootFolder)
@@ -72,7 +73,7 @@ func (d *Data) SaveMaster(dpath string, updateLegacy bool) error {
 				}
 				var routeFolder *kml.Folder
 				switch route.Key.Required {
-				case REGULAR:
+				case globals.REGULAR:
 					switch route.Key.Direction {
 					case "S":
 						routeFolder = &kml.Folder{Name: "Southbound"}
@@ -83,7 +84,7 @@ func (d *Data) SaveMaster(dpath string, updateLegacy bool) error {
 					default:
 						routeFolder = sectionFolder
 					}
-				case OPTIONAL:
+				case globals.OPTIONAL:
 					var routeHolderFolder *kml.Folder
 					if f := optionalRouteHolderFolders[route.Key.Option]; f != nil {
 						routeHolderFolder = f
@@ -245,7 +246,7 @@ func (d *Data) getWaypointFolders(legacy *LegacyRenameHolder) (regularStartEndFo
 		for _, route := range routes {
 			var folder *kml.Folder
 			var nameFormat string
-			if route.Key.Required == REGULAR {
+			if route.Key.Required == globals.REGULAR {
 				folder = regularStartEndFolder
 				nameFormat = fmt.Sprintf("GPT%s%s%%s", section.Key.Code(), route.Key.Direction)
 				//nameFormat = fmt.Sprintf("GPT%s%s%%s (%s)", section.Key.Code(), route.Key.Direction, section.Name)
@@ -261,21 +262,21 @@ func (d *Data) getWaypointFolders(legacy *LegacyRenameHolder) (regularStartEndFo
 				//	nameFormat = fmt.Sprintf("%s%%s (%s)", route.String(), route.Name)
 				//}
 			}
-			if route.Modes[RAFT] != nil && route.Modes[HIKE] != nil && !route.Modes[RAFT].Segments[0].Line.Start().IsClose(route.Modes[HIKE].Segments[0].Line.Start(), DELTA) {
+			if route.Modes[globals.RAFT] != nil && route.Modes[globals.HIKE] != nil && !route.Modes[globals.RAFT].Segments[0].Line.Start().IsClose(route.Modes[globals.HIKE].Segments[0].Line.Start(), globals.DELTA) {
 				// needs separate points for hiking and packrafting
 				folder.Placemarks = append(folder.Placemarks, &kml.Placemark{
 					Visibility: 1,
 					Open:       0,
 					StyleUrl:   fmt.Sprintf("#go"),
 					Name:       fmt.Sprintf(nameFormat, " hiking") + " start",
-					Point:      kml.PosPoint(route.Modes[HIKE].Segments[0].Line.Start()),
+					Point:      kml.PosPoint(route.Modes[globals.HIKE].Segments[0].Line.Start()),
 				})
 				folder.Placemarks = append(folder.Placemarks, &kml.Placemark{
 					Visibility: 1,
 					Open:       0,
 					StyleUrl:   fmt.Sprintf("#go"),
 					Name:       fmt.Sprintf(nameFormat, " packrafting") + " start",
-					Point:      kml.PosPoint(route.Modes[RAFT].Segments[0].Line.Start()),
+					Point:      kml.PosPoint(route.Modes[globals.RAFT].Segments[0].Line.Start()),
 				})
 			} else {
 				folder.Placemarks = append(folder.Placemarks, &kml.Placemark{
@@ -286,21 +287,21 @@ func (d *Data) getWaypointFolders(legacy *LegacyRenameHolder) (regularStartEndFo
 					Point:      kml.PosPoint(route.All[0].Line.Start()),
 				})
 			}
-			if route.Modes[RAFT] != nil && route.Modes[HIKE] != nil && !route.Modes[RAFT].Segments[len(route.Modes[RAFT].Segments)-1].Line.End().IsClose(route.Modes[HIKE].Segments[len(route.Modes[HIKE].Segments)-1].Line.End(), DELTA) {
+			if route.Modes[globals.RAFT] != nil && route.Modes[globals.HIKE] != nil && !route.Modes[globals.RAFT].Segments[len(route.Modes[globals.RAFT].Segments)-1].Line.End().IsClose(route.Modes[globals.HIKE].Segments[len(route.Modes[globals.HIKE].Segments)-1].Line.End(), globals.DELTA) {
 				// needs separate points for hiking and packrafting
 				folder.Placemarks = append(folder.Placemarks, &kml.Placemark{
 					Visibility: 1,
 					Open:       0,
 					StyleUrl:   fmt.Sprintf("#grn-square"),
 					Name:       fmt.Sprintf(nameFormat, " hiking") + " end",
-					Point:      kml.PosPoint(route.Modes[HIKE].Segments[len(route.Modes[HIKE].Segments)-1].Line.End()),
+					Point:      kml.PosPoint(route.Modes[globals.HIKE].Segments[len(route.Modes[globals.HIKE].Segments)-1].Line.End()),
 				})
 				folder.Placemarks = append(folder.Placemarks, &kml.Placemark{
 					Visibility: 1,
 					Open:       0,
 					StyleUrl:   fmt.Sprintf("#grn-square"),
 					Name:       fmt.Sprintf(nameFormat, " packrafting") + " end",
-					Point:      kml.PosPoint(route.Modes[RAFT].Segments[len(route.Modes[RAFT].Segments)-1].Line.End()),
+					Point:      kml.PosPoint(route.Modes[globals.RAFT].Segments[len(route.Modes[globals.RAFT].Segments)-1].Line.End()),
 				})
 			} else {
 				folder.Placemarks = append(folder.Placemarks, &kml.Placemark{
@@ -318,7 +319,7 @@ func (d *Data) getWaypointFolders(legacy *LegacyRenameHolder) (regularStartEndFo
 		Name: "Waypoints by Section",
 	}
 	for _, key := range d.Keys {
-		if HAS_SINGLE && key != SINGLE {
+		if globals.HAS_SINGLE && key != globals.SINGLE {
 			continue
 		}
 		section := d.Sections[key]
@@ -512,7 +513,7 @@ func (d *Data) SaveKmlTracks(dpath string, stamp string) error {
 	do := func(name string, filter func(*Route) bool) (*kml.Folder, error) {
 		f := &kml.Folder{Name: name}
 		for _, key := range d.Keys {
-			if HAS_SINGLE && key != SINGLE {
+			if globals.HAS_SINGLE && key != globals.SINGLE {
 				continue
 			}
 			section := d.Sections[key]
@@ -520,13 +521,13 @@ func (d *Data) SaveKmlTracks(dpath string, stamp string) error {
 				Name: section.FolderName(),
 			}
 			for _, route := range section.Routes {
-				if name == "Regular Tracks" && route.Key.Required == OPTIONAL {
+				if name == "Regular Tracks" && route.Key.Required == globals.OPTIONAL {
 					continue
-				} else if name == "Optional Tracks" && route.Key.Required == REGULAR {
+				} else if name == "Optional Tracks" && route.Key.Required == globals.REGULAR {
 					continue
 				}
 				var trackFolder *kml.Folder
-				if route.Key.Required == REGULAR {
+				if route.Key.Required == globals.REGULAR {
 					if route.Key.Direction == "" {
 						trackFolder = sectionFolder
 					} else {
@@ -564,11 +565,11 @@ func (d *Data) SaveKmlTracks(dpath string, stamp string) error {
 		}
 		return f, nil
 	}
-	regularFolder, err := do("Regular Tracks", func(r *Route) bool { return r.Key.Required == REGULAR })
+	regularFolder, err := do("Regular Tracks", func(r *Route) bool { return r.Key.Required == globals.REGULAR })
 	if err != nil {
 		return fmt.Errorf("building regular tracks kml: %w", err)
 	}
-	optionalFolder, err := do("Optional Tracks", func(r *Route) bool { return r.Key.Required == OPTIONAL })
+	optionalFolder, err := do("Optional Tracks", func(r *Route) bool { return r.Key.Required == globals.OPTIONAL })
 	if err != nil {
 		return fmt.Errorf("building optional tracks kml: %w", err)
 	}
@@ -635,11 +636,11 @@ func (d *Data) SaveGpx(dpath string, stamp string) error {
 		},
 		{
 			path:  []string{"Combined Tracks", fmt.Sprintf("Optional Tracks (%s).gpx", stamp)},
-			match: func(s *Segment) bool { return s.Route.Key.Required == OPTIONAL },
+			match: func(s *Segment) bool { return s.Route.Key.Required == globals.OPTIONAL },
 		},
 		{
 			path:  []string{"Combined Tracks", fmt.Sprintf("Regular Tracks (%s).gpx", stamp)},
-			match: func(s *Segment) bool { return s.Route.Key.Required == REGULAR },
+			match: func(s *Segment) bool { return s.Route.Key.Required == globals.REGULAR },
 		},
 
 		{
@@ -1138,7 +1139,7 @@ func (d *Data) SaveGpx(dpath string, stamp string) error {
 
 	wpAll := gpx.Root{}
 	for _, key := range d.Keys {
-		if HAS_SINGLE && key != SINGLE {
+		if globals.HAS_SINGLE && key != globals.SINGLE {
 			continue
 		}
 		section := d.Sections[key]
@@ -1182,21 +1183,21 @@ func (d *Data) SaveGpx(dpath string, stamp string) error {
 		section := d.Sections[sectionKey]
 		var routes []*Route
 		for _, routeKey := range section.RouteKeys {
-			if routeKey.Required == OPTIONAL {
+			if routeKey.Required == globals.OPTIONAL {
 				continue
 			}
 			routes = append(routes, section.Routes[routeKey])
 		}
 		for _, route := range routes {
-			if route.Modes[RAFT] != nil && route.Modes[HIKE] != nil && !route.Modes[RAFT].Segments[0].Line.Start().IsClose(route.Modes[HIKE].Segments[0].Line.Start(), DELTA) {
+			if route.Modes[globals.RAFT] != nil && route.Modes[globals.HIKE] != nil && !route.Modes[globals.RAFT].Segments[0].Line.Start().IsClose(route.Modes[globals.HIKE].Segments[0].Line.Start(), globals.DELTA) {
 				// needs separate points for hiking and packrafting
 				wp1 := gpx.Waypoint{
-					Point: gpx.PosPoint(route.Modes[HIKE].Segments[0].Line.Start()),
+					Point: gpx.PosPoint(route.Modes[globals.HIKE].Segments[0].Line.Start()),
 					Name:  fmt.Sprintf("GPT%s%s (%s) hiking", section.Key.Code(), route.Key.Direction, section.Name),
 				}
 				startPoints.Waypoints = append(startPoints.Waypoints, wp1)
 				wp2 := gpx.Waypoint{
-					Point: gpx.PosPoint(route.Modes[RAFT].Segments[0].Line.Start()),
+					Point: gpx.PosPoint(route.Modes[globals.RAFT].Segments[0].Line.Start()),
 					Name:  fmt.Sprintf("GPT%s%s (%s) packrafting", section.Key.Code(), route.Key.Direction, section.Name),
 				}
 				startPoints.Waypoints = append(startPoints.Waypoints, wp2)
@@ -1225,23 +1226,23 @@ func (d *Data) SaveGaia(dpath string) error {
 	logln("saving gaia files")
 	// routes
 	{
-		for _, mode := range MODES {
+		for _, mode := range globals.MODES {
 			root := &gpx.Paged{
 				Max: 1000,
 			}
 			for _, key := range d.Keys {
-				if HAS_SINGLE && key != SINGLE {
+				if globals.HAS_SINGLE && key != globals.SINGLE {
 					continue
 				}
 				section := d.Sections[key]
-				if section.Key.Suffix == "H" && mode == RAFT || section.Key.Suffix == "P" && mode == HIKE {
+				if section.Key.Suffix == "H" && mode == globals.RAFT || section.Key.Suffix == "P" && mode == globals.HIKE {
 					continue
 				}
 				bucket := &gpx.Bucket{
 					Order: section.Routes[section.RouteKeys[0]].All[0].Line.Start().Lat,
 				}
 				for _, routeKey := range section.RouteKeys {
-					if routeKey.Required != REGULAR {
+					if routeKey.Required != globals.REGULAR {
 						continue
 					}
 					route := section.Routes[routeKey]
@@ -1282,17 +1283,17 @@ func (d *Data) SaveGaia(dpath string) error {
 					bucket.Routes = append(bucket.Routes, rte)
 
 					// start waypoint
-					if route.Modes[RAFT] != nil && route.Modes[HIKE] != nil && !route.Modes[RAFT].Segments[0].Line.Start().IsClose(route.Modes[HIKE].Segments[0].Line.Start(), DELTA) {
+					if route.Modes[globals.RAFT] != nil && route.Modes[globals.HIKE] != nil && !route.Modes[globals.RAFT].Segments[0].Line.Start().IsClose(route.Modes[globals.HIKE].Segments[0].Line.Start(), globals.DELTA) {
 						// start of packrafting version is different to start of hiking version.
-						if mode == HIKE {
+						if mode == globals.HIKE {
 							wp1 := gpx.Waypoint{
-								Point: gpx.PosPoint(route.Modes[HIKE].Segments[0].Line.Start()),
+								Point: gpx.PosPoint(route.Modes[globals.HIKE].Segments[0].Line.Start()),
 								Name:  fmt.Sprintf("GPT%s%s %s", section.Key.Code(), route.Key.Direction, section.Name),
 							}
 							bucket.Waypoints = append(bucket.Waypoints, wp1)
 						} else {
 							wp2 := gpx.Waypoint{
-								Point: gpx.PosPoint(route.Modes[RAFT].Segments[0].Line.Start()),
+								Point: gpx.PosPoint(route.Modes[globals.RAFT].Segments[0].Line.Start()),
 								Name:  fmt.Sprintf("GPT%s%s %s", section.Key.Code(), route.Key.Direction, section.Name),
 							}
 							bucket.Waypoints = append(bucket.Waypoints, wp2)
@@ -1309,9 +1310,9 @@ func (d *Data) SaveGaia(dpath string) error {
 			}
 			var modeString string
 			switch mode {
-			case HIKE:
+			case globals.HIKE:
 				modeString = "Hiking"
-			case RAFT:
+			case globals.RAFT:
 				modeString = "Packrafting"
 			}
 			if err := root.Save(filepath.Join(dpath, "GPX Files (For Gaia GPS app)", fmt.Sprintf("%s routes.gpx", modeString))); err != nil {
@@ -1322,23 +1323,23 @@ func (d *Data) SaveGaia(dpath string) error {
 
 	// options
 	{
-		for _, mode := range MODES {
+		for _, mode := range globals.MODES {
 			root := &gpx.Paged{
 				Max: 1000,
 			}
 			for _, key := range d.Keys {
-				if HAS_SINGLE && key != SINGLE {
+				if globals.HAS_SINGLE && key != globals.SINGLE {
 					continue
 				}
 				section := d.Sections[key]
-				if section.Key.Suffix == "H" && mode == RAFT || section.Key.Suffix == "P" && mode == HIKE {
+				if section.Key.Suffix == "H" && mode == globals.RAFT || section.Key.Suffix == "P" && mode == globals.HIKE {
 					continue
 				}
 				bucket := &gpx.Bucket{
 					Order: section.Routes[section.RouteKeys[0]].All[0].Line.Start().Lat,
 				}
 				for _, routeKey := range section.RouteKeys {
-					if routeKey.Required != OPTIONAL {
+					if routeKey.Required != globals.OPTIONAL {
 						continue
 					}
 					route := section.Routes[routeKey]
@@ -1390,9 +1391,9 @@ func (d *Data) SaveGaia(dpath string) error {
 			}
 			var modeString string
 			switch mode {
-			case HIKE:
+			case globals.HIKE:
 				modeString = "Hiking"
-			case RAFT:
+			case globals.RAFT:
 				modeString = "Packrafting"
 			}
 			if err := root.Save(filepath.Join(dpath, "GPX Files (For Gaia GPS app)", fmt.Sprintf("%s options.gpx", modeString))); err != nil {
@@ -1407,7 +1408,7 @@ func (d *Data) SaveGaia(dpath string) error {
 			Max: 1000,
 		}
 		for _, key := range d.Keys {
-			if HAS_SINGLE && key != SINGLE {
+			if globals.HAS_SINGLE && key != globals.SINGLE {
 				continue
 			}
 			for _, w := range d.Sections[key].Waypoints {
@@ -1479,7 +1480,7 @@ func (d *Data) SaveGaia(dpath string) error {
 
 		var areasPlacemarks []*kml.Placemark
 		for _, key := range d.Keys {
-			if HAS_SINGLE && key != SINGLE {
+			if globals.HAS_SINGLE && key != globals.SINGLE {
 				continue
 			}
 
@@ -1567,7 +1568,7 @@ I: Investigation Route
 `
 
 func debug(fpath string, name string) {
-	if !DEBUG {
+	if !globals.DEBUG {
 		return
 	}
 	f, err := os.Create(name)

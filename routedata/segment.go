@@ -1,4 +1,4 @@
-package main
+package routedata
 
 import (
 	"fmt"
@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/dave/gpt/geo"
+	"github.com/dave/gpt/globals"
 )
 
 // Segment is a placemark / linestring
@@ -21,7 +22,7 @@ type Segment struct {
 	Name         string   // named feature
 	Legacy       string   // name before last rename job
 	Line         geo.Line
-	Modes        map[ModeType]*SegmentModeData
+	Modes        map[globals.ModeType]*SegmentModeData
 }
 
 type SegmentModeData struct {
@@ -50,7 +51,7 @@ func (s Segment) PlacemarkName() string {
 	b.WriteString(" {")
 	b.WriteString(s.Route.Section.Key.Code())
 	b.WriteString(s.Route.Key.Direction)
-	if s.Route.Key.Required == OPTIONAL {
+	if s.Route.Key.Required == globals.OPTIONAL {
 		b.WriteString("-")
 		if s.Route.Key.Option > 0 {
 			b.WriteString(fmt.Sprintf("%02d", s.Route.Key.Option))
@@ -63,7 +64,7 @@ func (s Segment) PlacemarkName() string {
 	b.WriteString("}")
 
 	b.WriteString(" [")
-	if hike, raft := s.Modes[HIKE], s.Modes[RAFT]; hike != nil && raft != nil {
+	if hike, raft := s.Modes[globals.HIKE], s.Modes[globals.RAFT]; hike != nil && raft != nil {
 
 		if fmt.Sprintf("%.1f", raft.From) == fmt.Sprintf("%.1f", hike.From) {
 			b.WriteString(fmt.Sprintf("%.1f", raft.From))
@@ -267,7 +268,7 @@ func (s Segment) Style() string {
 		color = "white" // white - #ffffff
 	}
 
-	if s.Route.Key.Required == REGULAR {
+	if s.Route.Key.Required == globals.REGULAR {
 		weight = "thick"
 	} else {
 		weight = "thin"

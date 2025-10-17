@@ -1,4 +1,4 @@
-package main
+package routedata
 
 import (
 	"fmt"
@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/dave/gpt/geo"
+	"github.com/dave/gpt/globals"
 	"github.com/dave/gpt/kml"
 )
 
@@ -63,14 +64,14 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 
 	for _, optionalRegularFolder := range tracksFolder.Folders {
 
-		var required RequiredType
+		var required globals.RequiredType
 		switch optionalRegularFolder.Name {
 		case "Optional Tracks":
 			logln("scanning optional tracks")
-			required = OPTIONAL
+			required = globals.OPTIONAL
 		case "Regular Tracks":
 			logln("scanning regular tracks")
-			required = REGULAR
+			required = globals.REGULAR
 		default:
 			return fmt.Errorf("incorrect name in %q", optionalRegularFolder.Name)
 		}
@@ -88,9 +89,9 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 			suffix := matches[2]
 			name := strings.TrimSpace(matches[3])
 
-			sectionKey := SectionKey{number, suffix}
+			sectionKey := globals.SectionKey{number, suffix}
 
-			if HAS_SINGLE && sectionKey != SINGLE {
+			if globals.HAS_SINGLE && sectionKey != globals.SINGLE {
 				continue
 			}
 
@@ -102,7 +103,7 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 					Name:      name,
 					Routes:    map[RouteKey]*Route{},
 					Waypoints: nil,
-					Scraped:   map[ModeType]string{},
+					Scraped:   map[globals.ModeType]string{},
 				}
 			} else {
 				if sectionFolder.Name != d.Sections[sectionKey].Raw {
@@ -112,22 +113,22 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 
 			section := d.Sections[sectionKey]
 
-			if required == REGULAR {
+			if required == globals.REGULAR {
 				var routeKeys []RouteKey
 				routeFolders := map[RouteKey]*kml.Folder{}
 				for _, folder := range sectionFolder.Folders {
 					if folder.Name == "Southbound" {
-						key := RouteKey{Required: REGULAR, Direction: "S"}
+						key := RouteKey{Required: globals.REGULAR, Direction: "S"}
 						routeKeys = append(routeKeys, key)
 						routeFolders[key] = folder
 					} else if folder.Name == "Northbound" {
-						key := RouteKey{Required: REGULAR, Direction: "N"}
+						key := RouteKey{Required: globals.REGULAR, Direction: "N"}
 						routeKeys = append(routeKeys, key)
 						routeFolders[key] = folder
 					}
 				}
 				if len(routeKeys) == 0 {
-					key := RouteKey{Required: REGULAR, Direction: ""}
+					key := RouteKey{Required: globals.REGULAR, Direction: ""}
 					routeKeys = append(routeKeys, key)
 					routeFolders[key] = sectionFolder
 				}
@@ -137,7 +138,7 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 					for _, alternativeType := range ALTERNATIVE_TYPES {
 
 						if alternativeType == HIKING_ALTERNATIVES {
-							rkey.Required = OPTIONAL
+							rkey.Required = globals.OPTIONAL
 							rkey.Alternatives = true
 							rkey.AlternativesIndex = 1
 						}
@@ -148,7 +149,7 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 							Key:     rkey,
 							Name:    "",
 							All:     []*Segment{},
-							Modes:   map[ModeType]*RouteModeData{},
+							Modes:   map[globals.ModeType]*RouteModeData{},
 						}
 
 						if alternativeType != HIKING_ALTERNATIVES {
@@ -164,11 +165,11 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 							}
 						}
 
-						var modesInUse []ModeType
+						var modesInUse []globals.ModeType
 						if alternativeType == HIKING_ALTERNATIVES {
-							modesInUse = []ModeType{RAFT}
+							modesInUse = []globals.ModeType{globals.RAFT}
 						} else {
-							modesInUse = []ModeType{HIKE, RAFT}
+							modesInUse = []globals.ModeType{globals.HIKE, globals.RAFT}
 						}
 
 						for _, mode := range modesInUse {
@@ -176,10 +177,10 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 							codes := map[string]bool{}
 							if alternativeType == HIKING_ALTERNATIVES {
 								codes["RH"] = true
-							} else if mode == RAFT {
+							} else if mode == globals.RAFT {
 								codes["RR"] = true
 								codes["RP"] = true
-							} else if mode == HIKE {
+							} else if mode == globals.HIKE {
 								codes["RR"] = true
 								codes["RH"] = true
 							}
@@ -195,13 +196,13 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 								}
 								if prev != nil {
 									// check that segment adjoins prev.
-									adjoins := prev.Line.End().IsClose(segment.Line.Start(), DELTA)
+									adjoins := prev.Line.End().IsClose(segment.Line.Start(), globals.DELTA)
 									if !adjoins {
 										if alternativeType != HIKING_ALTERNATIVES {
 											return fmt.Errorf("segments %q and %q in %q are not joined", prev.Raw, segment.Raw, route.Debug())
 										}
-										if route.Modes[RAFT] != nil {
-											for _, s := range route.Modes[RAFT].Segments {
+										if route.Modes[globals.RAFT] != nil {
+											for _, s := range route.Modes[globals.RAFT].Segments {
 												route.All = append(route.All, s)
 											}
 										}
@@ -209,7 +210,7 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 											routes = append(routes, route)
 										}
 										newKey := RouteKey{
-											Required:          OPTIONAL,
+											Required:          globals.OPTIONAL,
 											Direction:         route.Key.Direction,
 											Alternatives:      true,
 											AlternativesIndex: route.Key.AlternativesIndex + 1,
@@ -219,7 +220,7 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 											Key:     newKey,
 											Name:    "",
 											All:     []*Segment{},
-											Modes:   map[ModeType]*RouteModeData{},
+											Modes:   map[globals.ModeType]*RouteModeData{},
 										}
 									}
 								}
@@ -233,9 +234,9 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 								route.Modes[mode].Segments = append(route.Modes[mode].Segments, segment)
 							}
 						}
-						if route.Key.Alternatives && route.Modes[RAFT] != nil {
+						if route.Key.Alternatives && route.Modes[globals.RAFT] != nil {
 							// special case for hiking alternatives routes
-							for _, s := range route.Modes[RAFT].Segments {
+							for _, s := range route.Modes[globals.RAFT].Segments {
 								route.All = append(route.All, s)
 							}
 						}
@@ -245,7 +246,7 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 						routes = append(routes, route)
 
 						for _, route := range routes {
-							for _, mode := range MODES {
+							for _, mode := range globals.MODES {
 								if route.Modes[mode] != nil {
 									route.Modes[mode].Network = &Network{
 										Mode:          mode,
@@ -297,7 +298,7 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 						routeName := matches[5]
 
 						rkey := RouteKey{
-							Required: OPTIONAL,
+							Required: globals.OPTIONAL,
 							Option:   optionNumber,
 							Variant:  variantCode,
 							Network:  networkCode,
@@ -313,7 +314,7 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 							Name:    routeName,
 							Option:  optionName,
 							All:     []*Segment{},
-							Modes:   map[ModeType]*RouteModeData{},
+							Modes:   map[globals.ModeType]*RouteModeData{},
 						}
 
 						for _, placemark := range routeFolder.Placemarks {
@@ -327,13 +328,13 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 							route.All = append(route.All, segment)
 						}
 
-						for _, mode := range MODES {
+						for _, mode := range globals.MODES {
 							for _, segmentPlacemark := range routeFolder.Placemarks {
 								codes := map[string]bool{}
 								switch mode {
-								case HIKE:
+								case globals.HIKE:
 									codes["OH"] = true
-								case RAFT:
+								case globals.RAFT:
 									codes["OH"] = true
 									codes["OP"] = true
 								}
@@ -356,7 +357,7 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 						if len(route.All) == 0 {
 							continue
 						}
-						for _, mode := range MODES {
+						for _, mode := range globals.MODES {
 							if route.Modes[mode] != nil {
 								route.Modes[mode].Network = &Network{
 									Mode:          mode,
@@ -393,7 +394,7 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 						ele, found := elevationCache[pos]
 						if !found {
 							var err error
-							ele, err = SrtmClient.GetElevation(http.DefaultClient, pos.Lat, pos.Lon)
+							ele, err = globals.SrtmClient.GetElevation(http.DefaultClient, pos.Lat, pos.Lon)
 							if err != nil {
 								return fmt.Errorf("looking up elevation for %q: %w", segment.Raw, err)
 							}
@@ -498,7 +499,7 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 				}
 				suffix := matches[2]
 				name := strings.TrimSpace(matches[3])
-				sectionKey := SectionKey{number, suffix}
+				sectionKey := globals.SectionKey{number, suffix}
 				section := d.Sections[sectionKey]
 				if section == nil {
 					continue
@@ -531,7 +532,7 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 		logln("looking up waypoint elevations")
 		waypointElevations := func(waypoints []Waypoint) error {
 			for i, w := range waypoints {
-				elevation, err := SrtmClient.GetElevation(http.DefaultClient, w.Lat, w.Lon)
+				elevation, err := globals.SrtmClient.GetElevation(http.DefaultClient, w.Lat, w.Lon)
 				if err != nil {
 					return fmt.Errorf("looking up waypoint elevation: %w", err)
 				}
@@ -592,7 +593,7 @@ func getSegment(route *Route, placemark *kml.Placemark, codes map[string]bool) (
 		Length:       placemark.GetLineString().Line().Length(),
 		Name:         matches[10],
 		Line:         placemark.GetLineString().Line(),
-		Modes:        map[ModeType]*SegmentModeData{},
+		Modes:        map[globals.ModeType]*SegmentModeData{},
 	}
 
 	segmentCache[placemark] = segment

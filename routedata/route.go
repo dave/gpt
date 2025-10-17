@@ -1,8 +1,10 @@
-package main
+package routedata
 
 import (
 	"fmt"
 	"strings"
+
+	"github.com/dave/gpt/globals"
 )
 
 //for _, sectionKey := range d.Keys {
@@ -19,7 +21,7 @@ type Route struct {
 	Name    string // track name for optional tracks
 	Option  string // name from option folder
 	All     []*Segment
-	Modes   map[ModeType]*RouteModeData
+	Modes   map[globals.ModeType]*RouteModeData
 }
 
 type RouteModeData struct {
@@ -28,7 +30,7 @@ type RouteModeData struct {
 }
 
 type RouteKey struct {
-	Required          RequiredType
+	Required          globals.RequiredType
 	Direction         string // North = "N", South = "S", All = "" (regular and optional hiking alternatives)
 	Option            int    // Option number. If true => Alternatives == false.
 	Variant           string // Variant code (one or two upper case letters). If true => Alternatives == false.
@@ -54,7 +56,7 @@ func (r *Route) FolderName() string {
 }
 
 func (k RouteKey) Debug() string {
-	if k.Required == REGULAR {
+	if k.Required == globals.REGULAR {
 		switch k.Direction {
 		case "S":
 			return "southbound"
@@ -105,7 +107,7 @@ func (k RouteKey) Debug() string {
 // j?: total number of networks
 func (r *Route) String() string {
 	var key string
-	if r.Key.Required == OPTIONAL {
+	if r.Key.Required == globals.OPTIONAL {
 		var alternatives string
 		if r.Key.Alternatives {
 			alternatives = "HA"
@@ -143,7 +145,7 @@ func (r *Route) Debug() string {
 		name = fmt.Sprintf(" (%s)", r.Name)
 	}
 
-	if r.Key.Required == REGULAR {
+	if r.Key.Required == globals.REGULAR {
 		return fmt.Sprintf("GPT%s%s%s", r.Section.Key.Code(), dir, name)
 	}
 	if r.Key.Alternatives {
@@ -158,7 +160,7 @@ func (r *Route) Debug() string {
 
 func (r *Route) BuildNetworks() error {
 
-	for _, mode := range MODES {
+	for _, mode := range globals.MODES {
 
 		if r.Modes[mode] == nil {
 			continue
@@ -189,7 +191,7 @@ func (r *Route) BuildNetworks() error {
 		}
 		nearby := map[*Point][]*Point{}
 
-		if r.Key.Required == REGULAR {
+		if r.Key.Required == globals.REGULAR {
 			// forming network for regluar routes is trivial
 
 			for i, segment := range rMode.Segments {
@@ -207,7 +209,7 @@ func (r *Route) BuildNetworks() error {
 					prevMode := prev.Modes[mode]
 
 					// ensure segments all join in regular routes
-					if !prevMode.EndPoint.Pos.IsClose(segmentMode.StartPoint.Pos, DELTA) {
+					if !prevMode.EndPoint.Pos.IsClose(segmentMode.StartPoint.Pos, globals.DELTA) {
 						return fmt.Errorf("%q and %q are %dm apart", prev.Raw, segment.Raw, prevMode.EndPoint.Pos.Distance(segmentMode.StartPoint.Pos)*1000)
 					}
 
@@ -242,7 +244,7 @@ func (r *Route) BuildNetworks() error {
 					if end.Segment == neighbour.Segment {
 						continue
 					}
-					if !end.Pos.IsClose(neighbour.Pos, DELTA) {
+					if !end.Pos.IsClose(neighbour.Pos, globals.DELTA) {
 						continue
 					}
 					nearby[end] = append(nearby[end], neighbour)
@@ -259,7 +261,7 @@ func (r *Route) BuildNetworks() error {
 							continue Outer
 						}
 					}
-					found, index := segment.Line.IsClose(end.Pos, DELTA)
+					found, index := segment.Line.IsClose(end.Pos, globals.DELTA)
 					if !found {
 						continue
 					}

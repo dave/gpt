@@ -10,32 +10,11 @@ import (
 	"path"
 	"time"
 
+	"github.com/dave/gpt/globals"
 	"github.com/dave/gpt/kml"
+	"github.com/dave/gpt/routedata"
 	"github.com/tkrajina/go-elevations/geoelevations"
 )
-
-var SrtmClient *geoelevations.Srtm
-
-const VERSION = "v0.3.4"
-const DELTA = 0.075 // see https://docs.google.com/spreadsheets/d/1q610i2TkfUTHWvtqVAJ0V8zFtzPMQKBXEm7jiPyuDCQ/edit
-
-var LOG, DEBUG bool
-var HAS_SINGLE bool
-var SINGLE SectionKey
-
-type ModeType int
-
-const HIKE ModeType = 0
-const RAFT ModeType = 1
-
-var MODES = []ModeType{HIKE, RAFT}
-
-type RequiredType int
-
-const REGULAR RequiredType = 0
-const OPTIONAL RequiredType = 1
-
-var REQUIRED_TYPES = []RequiredType{REGULAR, OPTIONAL}
 
 func main() {
 	if err := Main(); err != nil {
@@ -54,6 +33,7 @@ func Main() error {
 
 	input := flag.String("input", "./GPT Master.kmz", "input file")
 	logger := flag.Bool("log", true, "output logs")
+	//tiles := flag.Bool("tiles", false, "output tiles")
 	debugger := flag.Bool("debug", false, "debug")
 	single := flag.String("single", "", "only process a single section (for testing)")
 	ele := flag.Bool("ele", true, "lookup elevations")
@@ -64,29 +44,29 @@ func Main() error {
 	version := flag.Bool("version", false, "show version")
 	flag.Parse()
 
-	LOG = *logger
-	DEBUG = *debugger
+	globals.LOG = *logger
+	globals.DEBUG = *debugger
 
-	logln("initialising")
+	routedata.Initialise()
 
 	if *single != "" {
-		key, err := NewSectionKey(*single)
+		key, err := routedata.NewSectionKey(*single)
 		if err != nil {
 			return fmt.Errorf("parsing single flag: %w", err)
 		}
-		HAS_SINGLE = true
-		SINGLE = key
+		globals.HAS_SINGLE = true
+		globals.SINGLE = key
 	}
 
 	if *version {
-		fmt.Println(VERSION)
+		fmt.Println(globals.VERSION)
 		return nil
 	}
 
 	if *ele {
 		log.SetOutput(io.Discard)
 		var err error
-		SrtmClient, err = geoelevations.NewSrtmWithCustomCacheDir(http.DefaultClient, elevationCacheDir)
+		globals.SrtmClient, err = geoelevations.NewSrtmWithCustomCacheDir(http.DefaultClient, elevationCacheDir)
 		if err != nil {
 			return fmt.Errorf("creating srtm client: %w", err)
 		}
@@ -97,14 +77,13 @@ func Main() error {
 		return fmt.Errorf("loading tracks kmz: %w", err)
 	}
 
-	data := &Data{Sections: map[SectionKey]*Section{}}
+	data := &routedata.Data{Sections: map[globals.SectionKey]*routedata.Section{}}
 
 	if err := data.Scan(inputRoot, *ele); err != nil {
 		return fmt.Errorf("scanning kml: %w", err)
 	}
 
 	if *scrape {
-		logln("web scraping")
 		if err := data.Scrape(descriptionsCacheDir); err != nil {
 			return fmt.Errorf("scraping web: %w", err)
 		}
@@ -121,7 +100,7 @@ func Main() error {
 			if route.Option != "" {
 				continue
 			}
-			if route.Key.Required == REGULAR {
+			if route.Key.Required == globals.REGULAR {
 				continue
 			}
 			if route.Key.Option == 0 {
@@ -140,6 +119,11 @@ func Main() error {
 			route.Option = name
 		}
 	}
+
+	//if *tiles {
+	//	fmt.Println("Outputting tiles")
+	//	tiler.Output(*output, data)
+	//}
 
 	if err := data.SaveMaster(*output, *renames); err != nil {
 		return fmt.Errorf("saving master file: %w", err)
@@ -162,34 +146,4 @@ func Main() error {
 	}
 
 	return nil
-}
-
-func logln(a ...interface{}) {
-	if LOG {
-		fmt.Println(a...)
-	}
-}
-
-func logf(format string, a ...interface{}) {
-	if LOG {
-		fmt.Printf(format, a...)
-	}
-}
-
-func debugln(a ...interface{}) {
-	if DEBUG {
-		fmt.Println(a...)
-	}
-}
-
-func debugf(format string, a ...interface{}) {
-	if DEBUG {
-		fmt.Printf(format, a...)
-	}
-}
-
-func debugfln(format string, a ...interface{}) {
-	if DEBUG {
-		fmt.Printf(format+"\n", a...)
-	}
 }

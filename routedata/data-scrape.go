@@ -1,4 +1,4 @@
-package main
+package routedata
 
 import (
 	"bytes"
@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
+	"github.com/dave/gpt/globals"
 	"golang.org/x/net/html"
 )
 
@@ -20,9 +21,9 @@ const WAYPOINT_SYMBOL = "☉"
 const ROUTE_SYMBOL = "⬲" //"⛢"
 
 func (d *Data) Scrape(cachedir string) error {
-
+	logln("web scraping")
 	for _, key := range d.Keys {
-		if HAS_SINGLE && key != SINGLE {
+		if globals.HAS_SINGLE && key != globals.SINGLE {
 			continue
 		}
 		section := d.Sections[key]
@@ -184,13 +185,13 @@ func (s *Section) Scrape(cachedir string) error {
 		}
 	})
 
-	s.Scraped[HIKE] += fmt.Sprintf("\n%s Full information\n\nThe following information may be incomplete and out of date. Be sure to check the up to date source:\n\n%s\n\n", HEADING_SYMBOL, url)
-	s.Scraped[HIKE] += summaryHiking
-	s.Scraped[HIKE] += description
+	s.Scraped[globals.HIKE] += fmt.Sprintf("\n%s Full information\n\nThe following information may be incomplete and out of date. Be sure to check the up to date source:\n\n%s\n\n", HEADING_SYMBOL, url)
+	s.Scraped[globals.HIKE] += summaryHiking
+	s.Scraped[globals.HIKE] += description
 
-	s.Scraped[RAFT] += fmt.Sprintf("\n%s Full information\n\nThe following information may be incomplete and out of date. Be sure to check the up to date source:\n\n%s\n\n", HEADING_SYMBOL, url)
-	s.Scraped[RAFT] += summaryPackrafting
-	s.Scraped[RAFT] += description
+	s.Scraped[globals.RAFT] += fmt.Sprintf("\n%s Full information\n\nThe following information may be incomplete and out of date. Be sure to check the up to date source:\n\n%s\n\n", HEADING_SYMBOL, url)
+	s.Scraped[globals.RAFT] += summaryPackrafting
+	s.Scraped[globals.RAFT] += description
 
 	return nil
 }

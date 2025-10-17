@@ -1,4 +1,4 @@
-package main
+package routedata
 
 import (
 	"fmt"
@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/dave/gpt/geo"
+	"github.com/dave/gpt/globals"
 )
 
 // Network is a collection of Segments which adjoin at nodes. There is a node at the start and end of
@@ -14,7 +15,7 @@ type Network struct {
 	Route         *Route
 	RouteModeData *RouteModeData
 	Entry         *Segment
-	Mode          ModeType
+	Mode          globals.ModeType
 
 	Nodes     []*Node
 	Straights []*Straight

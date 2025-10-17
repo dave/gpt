@@ -1,18 +1,23 @@
-package main
+package routedata
 
 import (
 	"fmt"
 	"strings"
 
 	"github.com/dave/gpt/geo"
+	"github.com/dave/gpt/globals"
 )
 
 type Data struct {
-	Keys       []SectionKey
-	Sections   map[SectionKey]*Section
+	Keys       []globals.SectionKey
+	Sections   map[globals.SectionKey]*Section
 	Resupplies []Waypoint
 	Geographic []Waypoint
 	Important  []Waypoint
+}
+
+func Initialise() {
+	logln("initialising")
 }
 
 //func (d *Data) ForRoutePairs(f func(packrafting, hiking *Route) error) error {
@@ -119,7 +124,7 @@ func (d *Data) Normalise() error {
 		for _, routeKey := range section.RouteKeys {
 			route := section.Routes[routeKey]
 
-			for _, mode := range MODES {
+			for _, mode := range globals.MODES {
 				if route.Modes[mode] == nil {
 					continue
 				}
@@ -148,7 +153,7 @@ type Terminator struct {
 	geo.Pos
 	Option    string
 	Raw, Name string
-	Sections  []SectionKey // One waypoint can be at the start / end of multiple
+	Sections  []globals.SectionKey // One waypoint can be at the start / end of multiple
 }
 
 func (n Terminator) String() string {
