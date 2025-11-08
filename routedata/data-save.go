@@ -1222,8 +1222,77 @@ func (d *Data) SaveGpx(dpath string, stamp string) error {
 	return nil
 }
 
+func shouldEmitSection(mode globals.ModeType, section *Section) (bool, error) {
+	// Work out if any of the regular routes have hiking / packrafting specific modes.
+	var hasHikeMode, hasRaftMode bool
+	for routeKey, route := range section.Routes {
+		if routeKey.Required == globals.OPTIONAL {
+			continue
+		}
+		if route.Modes[globals.HIKE] != nil {
+			hasHikeMode = true
+		}
+		if route.Modes[globals.RAFT] != nil {
+			hasRaftMode = true
+		}
+	}
+
+	if section.Key.Suffix == "P" && mode == globals.HIKE {
+		if hasHikeMode {
+			// This packrafting section has a hiking mode. This should never happen, so return an error.
+			return false, fmt.Errorf("regular route in section GPT%s has hiking mode", section.Key.Code())
+		}
+		// Exclude packrafting section from the hiking output.
+		return false, nil
+	}
+	if section.Key.Suffix == "H" && mode == globals.RAFT {
+		if hasRaftMode {
+			// The hiking section has a packrafting mode, so we include it in the output. This happens for several
+			// sections e.g. GPT36H.
+			return true, nil
+		}
+		// This hiking section has no packrafting mode, so exclude from the output.
+		return false, nil
+	}
+	return true, nil
+}
+
+type bySectionFiles struct {
+	regular *gpx.Paged
+	options *gpx.Paged
+}
+
 func (d *Data) SaveGaia(dpath string) error {
 	logln("saving gaia files")
+
+	bySection := map[globals.ModeType]map[globals.SectionKey]*bySectionFiles{}
+	bySection[globals.RAFT] = map[globals.SectionKey]*bySectionFiles{}
+	bySection[globals.HIKE] = map[globals.SectionKey]*bySectionFiles{}
+	// initialise bySection map with gpx file for each section
+	for _, mode := range globals.MODES {
+		for _, key := range d.Keys {
+			if globals.HAS_SINGLE && key != globals.SINGLE {
+				continue
+			}
+			section := d.Sections[key]
+			ok, err := shouldEmitSection(mode, section)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				continue
+			}
+			bySection[mode][key] = &bySectionFiles{
+				regular: &gpx.Paged{
+					Max: 1000,
+				},
+				options: &gpx.Paged{
+					Max: 1000,
+				},
+			}
+		}
+	}
+
 	// routes
 	{
 		for _, mode := range globals.MODES {
@@ -1235,10 +1304,18 @@ func (d *Data) SaveGaia(dpath string) error {
 					continue
 				}
 				section := d.Sections[key]
-				if section.Key.Suffix == "H" && mode == globals.RAFT || section.Key.Suffix == "P" && mode == globals.HIKE {
+
+				ok, err := shouldEmitSection(mode, section)
+				if err != nil {
+					return err
+				}
+				if !ok {
 					continue
 				}
 				bucket := &gpx.Bucket{
+					Order: section.Routes[section.RouteKeys[0]].All[0].Line.Start().Lat,
+				}
+				bucketBySection := &gpx.Bucket{
 					Order: section.Routes[section.RouteKeys[0]].All[0].Line.Start().Lat,
 				}
 				for _, routeKey := range section.RouteKeys {
@@ -1260,7 +1337,7 @@ func (d *Data) SaveGaia(dpath string) error {
 						direction = " southbound"
 					}
 					rte.Name = fmt.Sprintf("GPT%s %s%s", section.Key.Code(), section.Name, direction)
-					rte.Desc = HEADING_SYMBOL + " " + rte.Name + "\n\n"
+					rte.Desc = H1_SYMBOL + " " + rte.Name + "\n\n"
 
 					var lines []geo.Line
 					for _, segment := range routeMode.Segments {
@@ -1281,6 +1358,7 @@ func (d *Data) SaveGaia(dpath string) error {
 					rte.Points = gpx.LinePoints(geo.MergeLines(lines))
 					rte.Desc += section.Scraped[mode]
 					bucket.Routes = append(bucket.Routes, rte)
+					bucketBySection.Routes = append(bucketBySection.Routes, rte)
 
 					// start waypoint
 					if route.Modes[globals.RAFT] != nil && route.Modes[globals.HIKE] != nil && !route.Modes[globals.RAFT].Segments[0].Line.Start().IsClose(route.Modes[globals.HIKE].Segments[0].Line.Start(), globals.DELTA) {
@@ -1291,12 +1369,14 @@ func (d *Data) SaveGaia(dpath string) error {
 								Name:  fmt.Sprintf("GPT%s%s %s", section.Key.Code(), route.Key.Direction, section.Name),
 							}
 							bucket.Waypoints = append(bucket.Waypoints, wp1)
+							bucketBySection.Waypoints = append(bucketBySection.Waypoints, wp1)
 						} else {
 							wp2 := gpx.Waypoint{
 								Point: gpx.PosPoint(route.Modes[globals.RAFT].Segments[0].Line.Start()),
 								Name:  fmt.Sprintf("GPT%s%s %s", section.Key.Code(), route.Key.Direction, section.Name),
 							}
 							bucket.Waypoints = append(bucket.Waypoints, wp2)
+							bucketBySection.Waypoints = append(bucketBySection.Waypoints, wp2)
 						}
 					} else {
 						wp := gpx.Waypoint{
@@ -1304,9 +1384,11 @@ func (d *Data) SaveGaia(dpath string) error {
 							Name:  fmt.Sprintf("GPT%s%s %s", section.Key.Code(), route.Key.Direction, section.Name),
 						}
 						bucket.Waypoints = append(bucket.Waypoints, wp)
+						bucketBySection.Waypoints = append(bucketBySection.Waypoints, wp)
 					}
 				}
 				root.Buckets = append(root.Buckets, bucket)
+				bySection[mode][key].regular.Buckets = append(bySection[mode][key].regular.Buckets, bucketBySection)
 			}
 			var modeString string
 			switch mode {
@@ -1332,10 +1414,18 @@ func (d *Data) SaveGaia(dpath string) error {
 					continue
 				}
 				section := d.Sections[key]
-				if section.Key.Suffix == "H" && mode == globals.RAFT || section.Key.Suffix == "P" && mode == globals.HIKE {
+
+				ok, err := shouldEmitSection(mode, section)
+				if err != nil {
+					return err
+				}
+				if !ok {
 					continue
 				}
 				bucket := &gpx.Bucket{
+					Order: section.Routes[section.RouteKeys[0]].All[0].Line.Start().Lat,
+				}
+				bucketBySection := &gpx.Bucket{
 					Order: section.Routes[section.RouteKeys[0]].All[0].Line.Start().Lat,
 				}
 				for _, routeKey := range section.RouteKeys {
@@ -1369,7 +1459,7 @@ func (d *Data) SaveGaia(dpath string) error {
 							trk.Name += fmt.Sprintf(" (%s)", route.Option)
 						}
 					}
-					trk.Desc = HEADING_SYMBOL + " " + trk.Name + "\n\n"
+					trk.Desc = H1_SYMBOL + " " + trk.Name + "\n\n"
 
 					var id int
 					for i, straight := range network.Straights {
@@ -1386,8 +1476,10 @@ func (d *Data) SaveGaia(dpath string) error {
 						trk.Segments = append(trk.Segments, gpx.TrackSegment{Points: gpx.LineTrackPoints(segment.Line)})
 					}
 					bucket.Tracks = append(bucket.Tracks, trk)
+					bucketBySection.Tracks = append(bucketBySection.Tracks, trk)
 				}
 				root.Buckets = append(root.Buckets, bucket)
+				bySection[mode][key].options.Buckets = append(bySection[mode][key].options.Buckets, bucketBySection)
 			}
 			var modeString string
 			switch mode {
@@ -1402,29 +1494,65 @@ func (d *Data) SaveGaia(dpath string) error {
 		}
 	}
 
+	// route by section
+	for mode, bySectionMap := range bySection {
+		for key, files := range bySectionMap {
+			var modeString string
+			switch mode {
+			case globals.HIKE:
+				modeString = "hiking"
+			case globals.RAFT:
+				modeString = "packrafting"
+			}
+			section := d.Sections[key]
+			if err := files.regular.Save(filepath.Join(dpath, "GPX Files (For Gaia GPS app)", "By section", fmt.Sprintf("GPT%s %s (%s route).gpx", key.Code(), section.Name, modeString))); err != nil {
+				return fmt.Errorf("writing routes by section (%s) gpx: %w", key.Code(), err)
+			}
+			if err := files.options.Save(filepath.Join(dpath, "GPX Files (For Gaia GPS app)", "By section", fmt.Sprintf("GPT%s %s (%s options).gpx", key.Code(), section.Name, modeString))); err != nil {
+				return fmt.Errorf("writing routes by section (%s) gpx: %w", key.Code(), err)
+			}
+		}
+	}
+
 	// waypoints
 	{
 		root := &gpx.Paged{
 			Max: 1000,
 		}
+		var waypointsByKey = map[globals.SectionKey]*gpx.Paged{}
 		for _, key := range d.Keys {
 			if globals.HAS_SINGLE && key != globals.SINGLE {
 				continue
+			}
+			waypointsByKey[key] = &gpx.Paged{
+				Max: 1000,
 			}
 			for _, w := range d.Sections[key].Waypoints {
 				bucket := &gpx.Bucket{
 					Order: w.Pos.Lat,
 				}
-				bucket.Waypoints = append(bucket.Waypoints, gpx.Waypoint{
+				bucketByKey := &gpx.Bucket{
+					Order: w.Pos.Lat,
+				}
+				wpt := gpx.Waypoint{
 					Point: gpx.PosPoint(w.Pos),
 					Name:  w.Name,
 					Desc:  "GPT" + key.Code(),
-				})
+				}
+				bucket.Waypoints = append(bucket.Waypoints, wpt)
+				bucketByKey.Waypoints = append(bucketByKey.Waypoints, wpt)
 				root.Buckets = append(root.Buckets, bucket)
+				waypointsByKey[key].Buckets = append(waypointsByKey[key].Buckets, bucketByKey)
 			}
 		}
 		if err := root.Save(filepath.Join(dpath, "GPX Files (For Gaia GPS app)", "Waypoints (routes).gpx")); err != nil {
 			return fmt.Errorf("writing waypoints (routes) gpx: %w", err)
+		}
+		for key, paged := range waypointsByKey {
+			section := d.Sections[key]
+			if err := paged.Save(filepath.Join(dpath, "GPX Files (For Gaia GPS app)", "By section", fmt.Sprintf("GPT%s %s (waypoints).gpx", key.Code(), section.Name))); err != nil {
+				return fmt.Errorf("writing waypoints by section (%s) gpx: %w", key.Code(), err)
+			}
 		}
 	}
 

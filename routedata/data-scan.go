@@ -64,14 +64,14 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 
 	for _, optionalRegularFolder := range tracksFolder.Folders {
 
-		var required globals.RequiredType
+		var sectionFolderType globals.RequiredType
 		switch optionalRegularFolder.Name {
 		case "Optional Tracks":
 			logln("scanning optional tracks")
-			required = globals.OPTIONAL
+			sectionFolderType = globals.OPTIONAL
 		case "Regular Tracks":
 			logln("scanning regular tracks")
-			required = globals.REGULAR
+			sectionFolderType = globals.REGULAR
 		default:
 			return fmt.Errorf("incorrect name in %q", optionalRegularFolder.Name)
 		}
@@ -113,7 +113,7 @@ func (d *Data) Scan(inputRoot kml.Root, elevation bool) error {
 
 			section := d.Sections[sectionKey]
 
-			if required == globals.REGULAR {
+			if sectionFolderType == globals.REGULAR {
 				var routeKeys []RouteKey
 				routeFolders := map[RouteKey]*kml.Folder{}
 				for _, folder := range sectionFolder.Folders {

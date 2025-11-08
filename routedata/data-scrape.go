@@ -16,7 +16,8 @@ import (
 )
 
 const WARNING_SYMBOL = "☞"
-const HEADING_SYMBOL = "●" //"◉" //"✪" //"●" //"★" //"⦿"
+const H1_SYMBOL = "●" //"◉" //"✪" //"●" //"★" //"⦿"
+const H2_SYMBOL = "★" //"◉" //"✪" //"●" //"★" //"⦿"
 const WAYPOINT_SYMBOL = "☉"
 const ROUTE_SYMBOL = "⬲" //"⛢"
 
@@ -96,14 +97,18 @@ func (s *Section) Scrape(cachedir string) error {
 		var ignoreSection bool
 		var summary []*html.Node
 		title := strings.TrimSpace(getText(selection))
+		headingSymbol := H2_SYMBOL
+		if level(selection.Parent().Nodes[0].Data) == 1 {
+			headingSymbol = H1_SYMBOL
+		}
 		switch title {
-		case "Elevation Profile", "Satellite Image Map", "Summary Table", "Alerts and Logs of Past Seasons", "Older information for review", "Image Gallery", "Images":
+		case "How to a add new entry", "Elevation Profile", "Satellite Image Map", "Summary Table", "Alerts and Logs of Past Seasons", "Older information for review", "Image Gallery", "Images":
 			var ignoredCount int
 			switch selection.Parent().Nodes[0].Data {
-			case "h2":
-				//ignoring an h2? skip all nodes until we find an h2
+			case "h1", "h2":
+				// ignoring an h1/h2? skip all nodes until we find a lower or equal level title
 				next := selection.Parent().Next()
-				for next != nil && len(next.Nodes) > 0 && next.Nodes[0].Data != "h2" {
+				for next != nil && len(next.Nodes) > 0 && level(next.Nodes[0].Data) > level(selection.Parent().Nodes[0].Data) {
 					if title == "Summary Table" {
 						// summary
 						summary = append(summary, next.Nodes[0])
@@ -114,7 +119,7 @@ func (s *Section) Scrape(cachedir string) error {
 				}
 			case "h3", "h4", "h5":
 				next := selection.Parent().Next()
-				for next != nil && len(next.Nodes) > 0 && next.Nodes[0].Data != "h2" && next.Nodes[0].Data != "h3" && next.Nodes[0].Data != "h4" && next.Nodes[0].Data != "h5" {
+				for next != nil && len(next.Nodes) > 0 && level(next.Nodes[0].Data) > level(selection.Parent().Nodes[0].Data) {
 					ignored[next.Nodes[0]] = true
 					next = next.Next()
 					ignoredCount++
@@ -122,12 +127,12 @@ func (s *Section) Scrape(cachedir string) error {
 			}
 
 			if len(summary) == 0 {
-				if ignoredCount > 0 {
-					write(HEADING_SYMBOL + " " + strings.TrimSpace(getText(selection)) + "\n\n")
+				if ignoredCount > 0 && strings.TrimSpace(getText(selection)) != "How to a add new entry" {
+					write(headingSymbol + " " + strings.TrimSpace(getText(selection)) + "\n\n")
 					write(WARNING_SYMBOL + " Section removed - see web page.\n\n")
 				}
 			} else {
-				writeS(HEADING_SYMBOL + " " + strings.TrimSpace(getText(selection)) + "\n\n")
+				writeS(headingSymbol + " " + strings.TrimSpace(getText(selection)) + "\n\n")
 				summary := goquery.Selection{Nodes: summary}
 				trs := summary.Find("tr")
 				trs.Each(func(i int, tr *goquery.Selection) {
@@ -160,7 +165,7 @@ func (s *Section) Scrape(cachedir string) error {
 
 		var section []*goquery.Selection
 		next := selection.Parent().Next()
-		for next != nil && len(next.Nodes) > 0 && next.Nodes[0].Data != "h2" && next.Nodes[0].Data != "h3" && next.Nodes[0].Data != "h4" && next.Nodes[0].Data != "h5" {
+		for next != nil && len(next.Nodes) > 0 && next.Nodes[0].Data != "h1" && next.Nodes[0].Data != "h2" && next.Nodes[0].Data != "h3" && next.Nodes[0].Data != "h4" && next.Nodes[0].Data != "h5" {
 			switch {
 			case strings.TrimSpace(getText(next)) == "To be issued.":
 			case strings.TrimSpace(getText(next)) == "Not applicable.":
@@ -171,10 +176,33 @@ func (s *Section) Scrape(cachedir string) error {
 			next = next.Next()
 		}
 
+		var sectionHasContent bool
+
+		next = selection.Parent().Next()
+		for next != nil && len(next.Nodes) > 0 && level(next.Nodes[0].Data) > level(selection.Parent().Nodes[0].Data) {
+			if isHeading(next.Nodes[0].Data) {
+				next = next.Next()
+				continue
+			}
+			content := strings.TrimSpace(getText(next))
+			switch {
+			case content == "":
+			case content == "To be issued.":
+			case content == "Not applicable.":
+				// nothing
+			default:
+				sectionHasContent = true
+			}
+			if sectionHasContent {
+				break
+			}
+			next = next.Next()
+		}
+
 		if ignoreSection {
 			return
-		} else if len(section) > 0 {
-			write(HEADING_SYMBOL + " " + strings.TrimSpace(getText(selection)) + "\n\n")
+		} else if sectionHasContent { // if len(section) > 0 {
+			write(headingSymbol + " " + strings.TrimSpace(getText(selection)) + "\n\n")
 			for _, part := range section {
 				if part.Nodes[0].Data == "table" {
 					write(WARNING_SYMBOL + " Table removed - see web page.\n\n")
@@ -185,11 +213,11 @@ func (s *Section) Scrape(cachedir string) error {
 		}
 	})
 
-	s.Scraped[globals.HIKE] += fmt.Sprintf("\n%s Full information\n\nThe following information may be incomplete and out of date. Be sure to check the up to date source:\n\n%s\n\n", HEADING_SYMBOL, url)
+	s.Scraped[globals.HIKE] += fmt.Sprintf("\n%s Full information\n\nThe following information may be incomplete and out of date. Be sure to check the up to date source:\n\n%s\n\n", H1_SYMBOL, url)
 	s.Scraped[globals.HIKE] += summaryHiking
 	s.Scraped[globals.HIKE] += description
 
-	s.Scraped[globals.RAFT] += fmt.Sprintf("\n%s Full information\n\nThe following information may be incomplete and out of date. Be sure to check the up to date source:\n\n%s\n\n", HEADING_SYMBOL, url)
+	s.Scraped[globals.RAFT] += fmt.Sprintf("\n%s Full information\n\nThe following information may be incomplete and out of date. Be sure to check the up to date source:\n\n%s\n\n", H1_SYMBOL, url)
 	s.Scraped[globals.RAFT] += summaryPackrafting
 	s.Scraped[globals.RAFT] += description
 
@@ -259,4 +287,27 @@ func getText(s *goquery.Selection) string {
 	str = strings.ReplaceAll(str, "\uF0B1", WAYPOINT_SYMBOL)
 	str = strings.ReplaceAll(str, "\uF08F", ROUTE_SYMBOL)
 	return str
+}
+
+func isHeading(h string) bool {
+	switch h {
+	case "h1", "h2", "h3", "h4", "h5":
+		return true
+	}
+	return false
+}
+func level(h string) int {
+	switch h {
+	case "h1":
+		return 1
+	case "h2":
+		return 2
+	case "h3":
+		return 3
+	case "h4":
+		return 4
+	case "h5":
+		return 5
+	}
+	return 999
 }
