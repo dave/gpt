@@ -1219,6 +1219,10 @@ func (d *Data) SaveGpx(dpath string, stamp string) error {
 		return fmt.Errorf("saving Nomenclature.txt: %w", err)
 	}
 
+	if err := ioutil.WriteFile(filepath.Join(dpath, "GPX Files (For Gaia GPS app)", "Readme.txt"), []byte(Readme), 0666); err != nil {
+		return fmt.Errorf("saving Readme.txt: %w", err)
+	}
+
 	return nil
 }
 
@@ -1504,11 +1508,10 @@ func (d *Data) SaveGaia(dpath string) error {
 			case globals.RAFT:
 				modeString = "packrafting"
 			}
-			section := d.Sections[key]
-			if err := files.regular.Save(filepath.Join(dpath, "GPX Files (For Gaia GPS app)", "By section", fmt.Sprintf("GPT%s %s (%s route).gpx", key.Code(), section.Name, modeString))); err != nil {
+			if err := files.regular.Save(filepath.Join(dpath, "GPX Files (For Gaia GPS app)", "Sections", fmt.Sprintf("GPT%s %s route.gpx", key.Code(), modeString))); err != nil {
 				return fmt.Errorf("writing routes by section (%s) gpx: %w", key.Code(), err)
 			}
-			if err := files.options.Save(filepath.Join(dpath, "GPX Files (For Gaia GPS app)", "By section", fmt.Sprintf("GPT%s %s (%s options).gpx", key.Code(), section.Name, modeString))); err != nil {
+			if err := files.options.Save(filepath.Join(dpath, "GPX Files (For Gaia GPS app)", "Sections", fmt.Sprintf("GPT%s %s options.gpx", key.Code(), modeString))); err != nil {
 				return fmt.Errorf("writing routes by section (%s) gpx: %w", key.Code(), err)
 			}
 		}
@@ -1549,8 +1552,7 @@ func (d *Data) SaveGaia(dpath string) error {
 			return fmt.Errorf("writing waypoints (routes) gpx: %w", err)
 		}
 		for key, paged := range waypointsByKey {
-			section := d.Sections[key]
-			if err := paged.Save(filepath.Join(dpath, "GPX Files (For Gaia GPS app)", "By section", fmt.Sprintf("GPT%s %s (waypoints).gpx", key.Code(), section.Name))); err != nil {
+			if err := paged.Save(filepath.Join(dpath, "GPX Files (For Gaia GPS app)", "Sections", fmt.Sprintf("GPT%s waypoints.gpx", key.Code()))); err != nil {
 				return fmt.Errorf("writing waypoints by section (%s) gpx: %w", key.Code(), err)
 			}
 		}
@@ -1667,6 +1669,22 @@ func (d *Data) SaveGaia(dpath string) error {
 }
 
 var wpts = map[string]int{}
+
+const Readme = `This folder contains GPX files optimised for import into Gaia GPS.
+
+The "Sections" and "Combined" folders have the same contents, but "Sections" 
+splits everything out by section. I find the "Combined" files are great for 
+getting an overview of the routes, but the "Sections" files are better when 
+doing detailed planning. I recommend copying the "Sections" folder to your 
+device, but only importing the files into Gaia as and when you need them. 
+
+In the description field for all regular routes is information scraped from 
+the relevant wikiexplora article, but make sure you check the actual 
+wikiexplora website because the contents of the GPX may be out of date.
+
+Areas.kmz just splits the entire area up into squares. This helps when 
+downloading maps - tap on the area, tap "More" > "Download Maps for Area".
+`
 
 const Nomenclature = `EXP: Exploration Route
 
