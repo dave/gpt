@@ -1397,7 +1397,7 @@ func (d *Data) SaveGaia(dpath string) error {
 			case globals.RAFT:
 				modeString = "Packrafting"
 			}
-			if err := root.Save(filepath.Join(dpath, "GPX Files (For Gaia GPS app)", fmt.Sprintf("%s routes.gpx", modeString))); err != nil {
+			if err := root.Save(filepath.Join(dpath, "GPX Files (For Gaia GPS app)", "Combined", fmt.Sprintf("%s routes.gpx", modeString))); err != nil {
 				return fmt.Errorf("writing routes (%s) gpx: %w", modeString, err)
 			}
 		}
@@ -1488,7 +1488,7 @@ func (d *Data) SaveGaia(dpath string) error {
 			case globals.RAFT:
 				modeString = "Packrafting"
 			}
-			if err := root.Save(filepath.Join(dpath, "GPX Files (For Gaia GPS app)", fmt.Sprintf("%s options.gpx", modeString))); err != nil {
+			if err := root.Save(filepath.Join(dpath, "GPX Files (For Gaia GPS app)", "Combined", fmt.Sprintf("%s options.gpx", modeString))); err != nil {
 				return fmt.Errorf("writing options (%s) gpx: %w", modeString, err)
 			}
 		}
@@ -1545,7 +1545,7 @@ func (d *Data) SaveGaia(dpath string) error {
 				waypointsByKey[key].Buckets = append(waypointsByKey[key].Buckets, bucketByKey)
 			}
 		}
-		if err := root.Save(filepath.Join(dpath, "GPX Files (For Gaia GPS app)", "Waypoints (routes).gpx")); err != nil {
+		if err := root.Save(filepath.Join(dpath, "GPX Files (For Gaia GPS app)", "Combined", "Waypoints (routes).gpx")); err != nil {
 			return fmt.Errorf("writing waypoints (routes) gpx: %w", err)
 		}
 		for key, paged := range waypointsByKey {
