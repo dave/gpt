@@ -159,17 +159,15 @@ func (d *Data) SaveMaster(dpath string, updateLegacy bool) error {
 		},
 	}
 
-	doc := kml.Document{
-		Name:    "GPT Master.kmz",
-		Folders: []*kml.Folder{tracksFolder, pointsFolder},
+	rootMaster := kml.Root{
+		Xmlns: "http://www.opengis.net/kml/2.2",
+		Document: kml.Document{
+			Name:    "GPT Master.kmz",
+			Folders: []*kml.Folder{tracksFolder, pointsFolder},
+			Styles:  segmentStyles(),
+		},
 	}
-	addSegmentStyles(&doc)
-
-	root := kml.Root{
-		Xmlns:    "http://www.opengis.net/kml/2.2",
-		Document: doc,
-	}
-	if err := root.Save(filepath.Join(dpath, "GPT Master.kmz")); err != nil {
+	if err := rootMaster.Save(filepath.Join(dpath, "GPT Master.kmz")); err != nil {
 		return fmt.Errorf("saving master: %w", err)
 	}
 
@@ -393,6 +391,7 @@ func (d *Data) SaveKmlWaypoints(dpath string, stamp string) error {
 					},
 				},
 			},
+			Styles: segmentStyles(),
 		},
 	}
 	if err := all.Save(filepath.Join(dpath, "KMZ File (For Google Earth and Smartphones)", "Waypoints", "All Points.kmz")); err != nil {
@@ -404,6 +403,7 @@ func (d *Data) SaveKmlWaypoints(dpath string, stamp string) error {
 		Document: kml.Document{
 			Name:    "Important Information.kmz",
 			Folders: []*kml.Folder{importantFolder},
+			Styles:  segmentStyles(),
 		},
 	}
 	if err := imp.Save(filepath.Join(dpath, "KMZ File (For Google Earth and Smartphones)", "Waypoints", "Important Information.kmz")); err != nil {
@@ -415,6 +415,7 @@ func (d *Data) SaveKmlWaypoints(dpath string, stamp string) error {
 		Document: kml.Document{
 			Name:    "Resupply Locations.kmz",
 			Folders: []*kml.Folder{resupplyFolder},
+			Styles:  segmentStyles(),
 		},
 	}
 	if err := res.Save(filepath.Join(dpath, "KMZ File (For Google Earth and Smartphones)", "Waypoints", "Resupply Locations.kmz")); err != nil {
@@ -426,6 +427,7 @@ func (d *Data) SaveKmlWaypoints(dpath string, stamp string) error {
 		Document: kml.Document{
 			Name:    "Section Start Points (regular).kmz",
 			Folders: []*kml.Folder{regularStartEndFolder},
+			Styles:  segmentStyles(),
 		},
 	}
 	if err := regStart.Save(filepath.Join(dpath, "KMZ File (For Google Earth and Smartphones)", "Waypoints", "Section Start Points (regular).kmz")); err != nil {
@@ -437,6 +439,7 @@ func (d *Data) SaveKmlWaypoints(dpath string, stamp string) error {
 		Document: kml.Document{
 			Name:    "Section Start Points (optional).kmz",
 			Folders: []*kml.Folder{optionalStartEndFolder},
+			Styles:  segmentStyles(),
 		},
 	}
 	if err := optStart.Save(filepath.Join(dpath, "KMZ File (For Google Earth and Smartphones)", "Waypoints", "Section Start Points (optional).kmz")); err != nil {
@@ -448,6 +451,7 @@ func (d *Data) SaveKmlWaypoints(dpath string, stamp string) error {
 		Document: kml.Document{
 			Name:    "Waypoints.kmz",
 			Folders: []*kml.Folder{waypointsFolder},
+			Styles:  segmentStyles(),
 		},
 	}
 	if err := way.Save(filepath.Join(dpath, "KMZ File (For Google Earth and Smartphones)", "Waypoints", "Waypoints.kmz")); err != nil {
@@ -466,11 +470,12 @@ func (d *Data) SaveKmlWaypoints(dpath string, stamp string) error {
 	return nil
 }
 
-func addSegmentStyles(d *kml.Document) {
+func segmentStyles() []*kml.Style {
+	var styles []*kml.Style
 	for weightName, weightValue := range weights {
 		for colourName, colourValue := range colours {
 			r, g, b := colourValue[0:2], colourValue[2:4], colourValue[4:6]
-			d.Styles = append(d.Styles, &kml.Style{
+			styles = append(styles, &kml.Style{
 				Id: fmt.Sprintf("%s-%s", weightName, colourName),
 				LineStyle: &kml.LineStyle{
 					Color: fmt.Sprintf("ff%s%s%s", b, g, r),
@@ -495,14 +500,15 @@ func addSegmentStyles(d *kml.Document) {
 		}
 	}
 
-	colours := []string{"blu", "wht", "ylw", "red", "grn", "pink", "orange"}
-	decorations := []string{"blank", "stars", "circle", "square"}
-	for _, colour := range colours {
-		for _, decoration := range decorations {
-			d.Styles = append(d.Styles, addStyle(fmt.Sprintf("%s-%s", colour, decoration)))
+	wpColours := []string{"blu", "wht", "ylw", "red", "grn", "pink", "orange"}
+	wpDecorations := []string{"blank", "stars", "circle", "square"}
+	for _, colour := range wpColours {
+		for _, decoration := range wpDecorations {
+			styles = append(styles, addStyle(fmt.Sprintf("%s-%s", colour, decoration)))
 		}
 	}
-	d.Styles = append(d.Styles, addStyle("go"))
+	styles = append(styles, addStyle("go"))
+	return styles
 }
 
 func (d *Data) SaveKmlTracks(dpath string, stamp string) error {
@@ -584,9 +590,9 @@ func (d *Data) SaveKmlTracks(dpath string, stamp string) error {
 					Folders: []*kml.Folder{regularFolder, optionalFolder},
 				},
 			},
+			Styles: segmentStyles(),
 		},
 	}
-	addSegmentStyles(&all.Document)
 	if err := all.Save(filepath.Join(dpath, "KMZ File (For Google Earth and Smartphones)", "Tracks", "All Tracks.kmz")); err != nil {
 		return fmt.Errorf("saving All Tracks.kmz: %w", err)
 	}
@@ -596,9 +602,9 @@ func (d *Data) SaveKmlTracks(dpath string, stamp string) error {
 			Name:    "Regular Tracks.kmz",
 			Open:    1,
 			Folders: []*kml.Folder{regularFolder},
+			Styles:  segmentStyles(),
 		},
 	}
-	addSegmentStyles(&regular.Document)
 	if err := regular.Save(filepath.Join(dpath, "KMZ File (For Google Earth and Smartphones)", "Tracks", "Regular Tracks.kmz")); err != nil {
 		return fmt.Errorf("saving Regular Tracks.kmz: %w", err)
 	}
@@ -608,9 +614,9 @@ func (d *Data) SaveKmlTracks(dpath string, stamp string) error {
 			Name:    "Optional Tracks.kmz",
 			Open:    1,
 			Folders: []*kml.Folder{optionalFolder},
+			Styles:  segmentStyles(),
 		},
 	}
-	addSegmentStyles(&optional.Document)
 	if err := optional.Save(filepath.Join(dpath, "KMZ File (For Google Earth and Smartphones)", "Tracks", "Optional Tracks.kmz")); err != nil {
 		return fmt.Errorf("saving Optional Tracks.kmz: %w", err)
 	}
@@ -1262,8 +1268,10 @@ func shouldEmitSection(mode globals.ModeType, section *Section) (bool, error) {
 }
 
 type bySectionFiles struct {
-	regular *gpx.Paged
-	options *gpx.Paged
+	regularGpxGaia      *gpx.Paged
+	optionsGpxGaia      *gpx.Paged
+	regularKmlPeakVisor *kml.Root
+	optionsKmlPeakVisor *kml.Root
 }
 
 func (d *Data) SaveGaia(dpath string) error {
@@ -1286,12 +1294,43 @@ func (d *Data) SaveGaia(dpath string) error {
 			if !ok {
 				continue
 			}
+			var modeString string
+			switch mode {
+			case globals.HIKE:
+				modeString = "hiking"
+			case globals.RAFT:
+				modeString = "packrafting"
+			}
 			bySection[mode][key] = &bySectionFiles{
-				regular: &gpx.Paged{
+				regularGpxGaia: &gpx.Paged{
 					Max: 1000,
 				},
-				options: &gpx.Paged{
+				optionsGpxGaia: &gpx.Paged{
 					Max: 1000,
+				},
+				regularKmlPeakVisor: &kml.Root{
+					Xmlns: "http://www.opengis.net/kml/2.2",
+					Document: kml.Document{
+						Name: fmt.Sprintf("GPT%s %s route.kmz", key.Code(), modeString),
+						Folders: []*kml.Folder{
+							{
+								Name: "Routes",
+							},
+						},
+						Styles: segmentStyles(),
+					},
+				},
+				optionsKmlPeakVisor: &kml.Root{
+					Xmlns: "http://www.opengis.net/kml/2.2",
+					Document: kml.Document{
+						Name: fmt.Sprintf("GPT%s %s options.kmz", key.Code(), modeString),
+						Folders: []*kml.Folder{
+							{
+								Name: "Options",
+							},
+						},
+						Styles: segmentStyles(),
+					},
 				},
 			}
 		}
@@ -1300,8 +1339,27 @@ func (d *Data) SaveGaia(dpath string) error {
 	// routes
 	{
 		for _, mode := range globals.MODES {
-			root := &gpx.Paged{
+			var modeString string
+			switch mode {
+			case globals.HIKE:
+				modeString = "Hiking"
+			case globals.RAFT:
+				modeString = "Packrafting"
+			}
+			rootGpxGaia := &gpx.Paged{
 				Max: 1000,
+			}
+			rootKmlPeakVisor := &kml.Root{
+				Xmlns: "http://www.opengis.net/kml/2.2",
+				Document: kml.Document{
+					Name: fmt.Sprintf("%s routes.kmz", modeString),
+					Folders: []*kml.Folder{
+						{
+							Name: "Routes",
+						},
+					},
+					Styles: segmentStyles(),
+				},
 			}
 			for _, key := range d.Keys {
 				if globals.HAS_SINGLE && key != globals.SINGLE {
@@ -1333,76 +1391,100 @@ func (d *Data) SaveGaia(dpath string) error {
 					}
 					network := routeMode.Network
 
-					var rte gpx.Route
 					var direction string
 					if route.Key.Direction == "N" {
 						direction = " northbound"
 					} else if route.Key.Direction == "S" {
 						direction = " southbound"
 					}
-					rte.Name = fmt.Sprintf("GPT%s %s%s", section.Key.Code(), section.Name, direction)
-					rte.Desc = H1_SYMBOL + " " + rte.Name + "\n\n"
-
+					name := fmt.Sprintf("GPT%s %s%s", section.Key.Code(), section.Name, direction)
+					desc := H1_SYMBOL + " " + name + "\n\n"
 					var lines []geo.Line
 					for _, segment := range routeMode.Segments {
 						lines = append(lines, segment.Line)
 					}
-
 					var id int
 					for i, straight := range network.Straights {
 						if i > 0 {
-							rte.Desc += "---\n"
+							desc += "---\n"
 						}
 						for _, flush := range straight.Flushes {
 							id++
-							rte.Desc += flush.Description(id, false) + "\n"
+							desc += flush.Description(id, false) + "\n"
 						}
 					}
+					desc += section.Scraped[mode]
+					line := geo.MergeLines(lines)
 
-					rte.Points = gpx.LinePoints(geo.MergeLines(lines))
-					rte.Desc += section.Scraped[mode]
-					bucket.Routes = append(bucket.Routes, rte)
-					bucketBySection.Routes = append(bucketBySection.Routes, rte)
+					rteGpxGaia := gpx.Route{
+						Name:   name,
+						Desc:   desc,
+						Points: gpx.LinePoints(line),
+					}
+					rteKmlPeakVisor := kml.Placemark{
+						Name:        name,
+						Description: desc,
+						Visibility:  1,
+						Open:        0,
+						StyleUrl:    "#thick-red",
+						LineString:  &kml.LineString{Tessellate: true, Coordinates: kml.LineCoordinates(line)},
+					}
+
+					bucket.Routes = append(bucket.Routes, rteGpxGaia)
+					bucketBySection.Routes = append(bucketBySection.Routes, rteGpxGaia)
+					rootKmlPeakVisor.Document.Folders[0].Placemarks = append(
+						rootKmlPeakVisor.Document.Folders[0].Placemarks,
+						&rteKmlPeakVisor,
+					)
+					bySection[mode][key].regularKmlPeakVisor.Document.Folders[0].Placemarks = append(
+						bySection[mode][key].regularKmlPeakVisor.Document.Folders[0].Placemarks,
+						&rteKmlPeakVisor,
+					)
 
 					// start waypoint
+					var wpPos geo.Pos
 					if route.Modes[globals.RAFT] != nil && route.Modes[globals.HIKE] != nil && !route.Modes[globals.RAFT].Segments[0].Line.Start().IsClose(route.Modes[globals.HIKE].Segments[0].Line.Start(), globals.DELTA) {
 						// start of packrafting version is different to start of hiking version.
 						if mode == globals.HIKE {
-							wp1 := gpx.Waypoint{
-								Point: gpx.PosPoint(route.Modes[globals.HIKE].Segments[0].Line.Start()),
-								Name:  fmt.Sprintf("GPT%s%s %s", section.Key.Code(), route.Key.Direction, section.Name),
-							}
-							bucket.Waypoints = append(bucket.Waypoints, wp1)
-							bucketBySection.Waypoints = append(bucketBySection.Waypoints, wp1)
+							wpPos = route.Modes[globals.HIKE].Segments[0].Line.Start()
 						} else {
-							wp2 := gpx.Waypoint{
-								Point: gpx.PosPoint(route.Modes[globals.RAFT].Segments[0].Line.Start()),
-								Name:  fmt.Sprintf("GPT%s%s %s", section.Key.Code(), route.Key.Direction, section.Name),
-							}
-							bucket.Waypoints = append(bucket.Waypoints, wp2)
-							bucketBySection.Waypoints = append(bucketBySection.Waypoints, wp2)
+							wpPos = route.Modes[globals.RAFT].Segments[0].Line.Start()
 						}
 					} else {
-						wp := gpx.Waypoint{
-							Point: gpx.PosPoint(route.All[0].Line.Start()),
-							Name:  fmt.Sprintf("GPT%s%s %s", section.Key.Code(), route.Key.Direction, section.Name),
-						}
-						bucket.Waypoints = append(bucket.Waypoints, wp)
-						bucketBySection.Waypoints = append(bucketBySection.Waypoints, wp)
+						wpPos = route.All[0].Line.Start()
+					}
+					wpName := fmt.Sprintf("GPT%s%s %s", section.Key.Code(), route.Key.Direction, section.Name)
+					wp := gpx.Waypoint{
+						Point: gpx.PosPoint(wpPos),
+						Name:  wpName,
+					}
+					wpKml := kml.Placemark{
+						Visibility: 1,
+						Open:       0,
+						StyleUrl:   fmt.Sprintf("purple"),
+						Name:       wpName,
+						Point:      kml.PosPoint(wpPos),
+					}
+					bucket.Waypoints = append(bucket.Waypoints, wp)
+					bucketBySection.Waypoints = append(bucketBySection.Waypoints, wp)
+					rootKmlPeakVisor.Document.Folders[0].Placemarks = append(rootKmlPeakVisor.Document.Folders[0].Placemarks, &wpKml)
+					bySection[mode][key].regularKmlPeakVisor.Document.Folders[0].Placemarks = append(
+						bySection[mode][key].regularKmlPeakVisor.Document.Folders[0].Placemarks,
+						&wpKml,
+					)
+					_ = os.MkdirAll(filepath.Join(dpath, "Scraped (text)", modeString), 0777)
+					if err := os.WriteFile(filepath.Join(dpath, "Scraped (text)", modeString, fmt.Sprintf("%v.txt", name)), []byte(desc), 0666); err != nil {
+						return fmt.Errorf("writing scraped text (%s) gpx: %w", modeString, err)
 					}
 				}
-				root.Buckets = append(root.Buckets, bucket)
-				bySection[mode][key].regular.Buckets = append(bySection[mode][key].regular.Buckets, bucketBySection)
+				rootGpxGaia.Buckets = append(rootGpxGaia.Buckets, bucket)
+				bySection[mode][key].regularGpxGaia.Buckets = append(bySection[mode][key].regularGpxGaia.Buckets, bucketBySection)
 			}
-			var modeString string
-			switch mode {
-			case globals.HIKE:
-				modeString = "Hiking"
-			case globals.RAFT:
-				modeString = "Packrafting"
-			}
-			if err := root.Save(filepath.Join(dpath, "GPX Files (For Gaia GPS app)", "Combined", fmt.Sprintf("%s routes.gpx", modeString))); err != nil {
+			if err := rootGpxGaia.Save(filepath.Join(dpath, "GPX Files (For Gaia GPS app)", "Combined", fmt.Sprintf("%s routes.gpx", modeString))); err != nil {
 				return fmt.Errorf("writing routes (%s) gpx: %w", modeString, err)
+			}
+			if err := rootKmlPeakVisor.Save(filepath.Join(dpath, "KMZ Files (For Peak Visor app)", "Combined", fmt.Sprintf("%s routes.kmz", modeString))); err != nil {
+				return fmt.Errorf("writing routes (%s) kml: %w", modeString, err)
 			}
 		}
 	}
@@ -1410,8 +1492,27 @@ func (d *Data) SaveGaia(dpath string) error {
 	// options
 	{
 		for _, mode := range globals.MODES {
-			root := &gpx.Paged{
+			var modeString string
+			switch mode {
+			case globals.HIKE:
+				modeString = "Hiking"
+			case globals.RAFT:
+				modeString = "Packrafting"
+			}
+			rootGpxGaia := &gpx.Paged{
 				Max: 1000,
+			}
+			rootKmlPeakVisor := &kml.Root{
+				Xmlns: "http://www.opengis.net/kml/2.2",
+				Document: kml.Document{
+					Name: fmt.Sprintf("%s options.kmz", modeString),
+					Folders: []*kml.Folder{
+						{
+							Name: "Options",
+						},
+					},
+					Styles: segmentStyles(),
+				},
 			}
 			for _, key := range d.Keys {
 				if globals.HAS_SINGLE && key != globals.SINGLE {
@@ -1443,7 +1544,7 @@ func (d *Data) SaveGaia(dpath string) error {
 					}
 					network := routeMode.Network
 
-					var trk gpx.Track
+					var name string
 					if route.Key.Alternatives {
 						var direction string
 						if route.Key.Direction == "N" {
@@ -1451,49 +1552,75 @@ func (d *Data) SaveGaia(dpath string) error {
 						} else if route.Key.Direction == "S" {
 							direction = " southbound"
 						}
-						trk.Name = fmt.Sprintf("GPT%s%s hiking alternatives %d", route.Section.Key.Code(), direction, route.Key.AlternativesIndex)
+						name = fmt.Sprintf("GPT%s%s hiking alternatives %d", route.Section.Key.Code(), direction, route.Key.AlternativesIndex)
 					} else if route.Key.Option == 0 {
-						trk.Name = fmt.Sprintf("GPT%s variant %s%s", route.Section.Key.Code(), route.Key.Variant, route.Key.Network)
+						name = fmt.Sprintf("GPT%s variant %s%s", route.Section.Key.Code(), route.Key.Variant, route.Key.Network)
 						if route.Name != "" {
-							trk.Name += fmt.Sprintf(" (%s)", route.Name)
+							name += fmt.Sprintf(" (%s)", route.Name)
 						}
 					} else {
-						trk.Name = fmt.Sprintf("GPT%s option %d%s%s", route.Section.Key.Code(), route.Key.Option, route.Key.Variant, route.Key.Network)
+						name = fmt.Sprintf("GPT%s option %d%s%s", route.Section.Key.Code(), route.Key.Option, route.Key.Variant, route.Key.Network)
 						if route.Option != "" && route.Key.Variant == "" && (route.Key.Network == "" || route.Key.Network == "a") {
-							trk.Name += fmt.Sprintf(" (%s)", route.Option)
+							name += fmt.Sprintf(" (%s)", route.Option)
 						}
 					}
-					trk.Desc = H1_SYMBOL + " " + trk.Name + "\n\n"
+
+					desc := H1_SYMBOL + " " + name + "\n\n"
 
 					var id int
 					for i, straight := range network.Straights {
 						if i > 0 {
-							trk.Desc += "---\n"
+							desc += "---\n"
 						}
 						for _, flush := range straight.Flushes {
 							id++
-							trk.Desc += flush.Description(id, false) + "\n"
+							desc += flush.Description(id, false) + "\n"
 						}
 					}
 
+					var segments []gpx.TrackSegment
 					for _, segment := range routeMode.Segments {
-						trk.Segments = append(trk.Segments, gpx.TrackSegment{Points: gpx.LineTrackPoints(segment.Line)})
+						segments = append(segments, gpx.TrackSegment{Points: gpx.LineTrackPoints(segment.Line)})
 					}
+
+					var lines []geo.Line
+					for _, segment := range routeMode.Segments {
+						lines = append(lines, segment.Line)
+					}
+					line := geo.MergeLines(lines)
+
+					trk := gpx.Track{
+						Name:     name,
+						Desc:     desc,
+						Segments: segments,
+					}
+
+					trkKml := kml.Placemark{
+						Visibility:  1,
+						Open:        0,
+						StyleUrl:    "#thin-red",
+						Name:        name,
+						Description: desc,
+						LineString:  &kml.LineString{Tessellate: true, Coordinates: kml.LineCoordinates(line)},
+					}
+
 					bucket.Tracks = append(bucket.Tracks, trk)
 					bucketBySection.Tracks = append(bucketBySection.Tracks, trk)
+					rootKmlPeakVisor.Document.Folders[0].Placemarks = append(rootKmlPeakVisor.Document.Folders[0].Placemarks, &trkKml)
+					bySection[mode][key].optionsKmlPeakVisor.Document.Folders[0].Placemarks = append(
+						bySection[mode][key].optionsKmlPeakVisor.Document.Folders[0].Placemarks,
+						&trkKml,
+					)
+
 				}
-				root.Buckets = append(root.Buckets, bucket)
-				bySection[mode][key].options.Buckets = append(bySection[mode][key].options.Buckets, bucketBySection)
+				rootGpxGaia.Buckets = append(rootGpxGaia.Buckets, bucket)
+				bySection[mode][key].optionsGpxGaia.Buckets = append(bySection[mode][key].optionsGpxGaia.Buckets, bucketBySection)
 			}
-			var modeString string
-			switch mode {
-			case globals.HIKE:
-				modeString = "Hiking"
-			case globals.RAFT:
-				modeString = "Packrafting"
-			}
-			if err := root.Save(filepath.Join(dpath, "GPX Files (For Gaia GPS app)", "Combined", fmt.Sprintf("%s options.gpx", modeString))); err != nil {
+			if err := rootGpxGaia.Save(filepath.Join(dpath, "GPX Files (For Gaia GPS app)", "Combined", fmt.Sprintf("%s options.gpx", modeString))); err != nil {
 				return fmt.Errorf("writing options (%s) gpx: %w", modeString, err)
+			}
+			if err := rootKmlPeakVisor.Save(filepath.Join(dpath, "KMZ Files (For Peak Visor app)", "Combined", fmt.Sprintf("%s options.kmz", modeString))); err != nil {
+				return fmt.Errorf("writing options (%s) kmz: %w", modeString, err)
 			}
 		}
 	}
@@ -1508,27 +1635,58 @@ func (d *Data) SaveGaia(dpath string) error {
 			case globals.RAFT:
 				modeString = "packrafting"
 			}
-			if err := files.regular.Save(filepath.Join(dpath, "GPX Files (For Gaia GPS app)", "Sections", fmt.Sprintf("GPT%s %s route.gpx", key.Code(), modeString))); err != nil {
+			if err := files.regularGpxGaia.Save(filepath.Join(dpath, "GPX Files (For Gaia GPS app)", "Sections", fmt.Sprintf("GPT%s %s route.gpx", key.Code(), modeString))); err != nil {
 				return fmt.Errorf("writing routes by section (%s) gpx: %w", key.Code(), err)
 			}
-			if err := files.options.Save(filepath.Join(dpath, "GPX Files (For Gaia GPS app)", "Sections", fmt.Sprintf("GPT%s %s options.gpx", key.Code(), modeString))); err != nil {
+			if err := files.optionsGpxGaia.Save(filepath.Join(dpath, "GPX Files (For Gaia GPS app)", "Sections", fmt.Sprintf("GPT%s %s options.gpx", key.Code(), modeString))); err != nil {
 				return fmt.Errorf("writing routes by section (%s) gpx: %w", key.Code(), err)
+			}
+			if err := files.regularKmlPeakVisor.Save(filepath.Join(dpath, "KMZ Files (For Peak Visor app)", "Sections", fmt.Sprintf("GPT%s %s route.kmz", key.Code(), modeString))); err != nil {
+				return fmt.Errorf("writing routes by section (%s) kmz: %w", key.Code(), err)
+			}
+			if err := files.optionsKmlPeakVisor.Save(filepath.Join(dpath, "KMZ Files (For Peak Visor app)", "Sections", fmt.Sprintf("GPT%s %s options.kmz", key.Code(), modeString))); err != nil {
+				return fmt.Errorf("writing routes by section (%s) kmz: %w", key.Code(), err)
 			}
 		}
 	}
 
 	// waypoints
 	{
-		root := &gpx.Paged{
+		rootGpxGaia := &gpx.Paged{
 			Max: 1000,
 		}
-		var waypointsByKey = map[globals.SectionKey]*gpx.Paged{}
+		rootKmlPeakVisor := &kml.Root{
+			Xmlns: "http://www.opengis.net/kml/2.2",
+			Document: kml.Document{
+				Name: fmt.Sprintf("Waypoints (routes).kmz"),
+				Folders: []*kml.Folder{
+					{
+						Name: "Points",
+					},
+				},
+				Styles: segmentStyles(),
+			},
+		}
+		var waypointsByKeyGpx = map[globals.SectionKey]*gpx.Paged{}
+		var waypointsByKeyKml = map[globals.SectionKey]*kml.Root{}
 		for _, key := range d.Keys {
 			if globals.HAS_SINGLE && key != globals.SINGLE {
 				continue
 			}
-			waypointsByKey[key] = &gpx.Paged{
+			waypointsByKeyGpx[key] = &gpx.Paged{
 				Max: 1000,
+			}
+			waypointsByKeyKml[key] = &kml.Root{
+				Xmlns: "http://www.opengis.net/kml/2.2",
+				Document: kml.Document{
+					Name: fmt.Sprintf("GPT%s waypoints.gpx", key.Code()),
+					Folders: []*kml.Folder{
+						{
+							Name: "Points",
+						},
+					},
+					Styles: segmentStyles(),
+				},
 			}
 			for _, w := range d.Sections[key].Waypoints {
 				bucket := &gpx.Bucket{
@@ -1537,51 +1695,107 @@ func (d *Data) SaveGaia(dpath string) error {
 				bucketByKey := &gpx.Bucket{
 					Order: w.Pos.Lat,
 				}
-				wpt := gpx.Waypoint{
-					Point: gpx.PosPoint(w.Pos),
-					Name:  w.Name,
-					Desc:  "GPT" + key.Code(),
+				name := w.Name
+				desc := fmt.Sprintf("GPT%s", key.Code())
+				pos := w.Pos
+				wptGpx := gpx.Waypoint{
+					Point: gpx.PosPoint(pos),
+					Name:  name,
+					Desc:  desc,
 				}
-				bucket.Waypoints = append(bucket.Waypoints, wpt)
-				bucketByKey.Waypoints = append(bucketByKey.Waypoints, wpt)
-				root.Buckets = append(root.Buckets, bucket)
-				waypointsByKey[key].Buckets = append(waypointsByKey[key].Buckets, bucketByKey)
+				wptKml := kml.Placemark{
+					Visibility:  1,
+					Open:        0,
+					StyleUrl:    fmt.Sprintf("red"),
+					Name:        name,
+					Description: desc,
+					Point:       kml.PosPoint(pos),
+				}
+				bucket.Waypoints = append(bucket.Waypoints, wptGpx)
+				bucketByKey.Waypoints = append(bucketByKey.Waypoints, wptGpx)
+				rootGpxGaia.Buckets = append(rootGpxGaia.Buckets, bucket)
+				waypointsByKeyGpx[key].Buckets = append(waypointsByKeyGpx[key].Buckets, bucketByKey)
+				rootKmlPeakVisor.Document.Folders[0].Placemarks = append(rootKmlPeakVisor.Document.Folders[0].Placemarks, &wptKml)
+				waypointsByKeyKml[key].Document.Folders[0].Placemarks = append(
+					waypointsByKeyKml[key].Document.Folders[0].Placemarks,
+					&wptKml,
+				)
 			}
 		}
-		if err := root.Save(filepath.Join(dpath, "GPX Files (For Gaia GPS app)", "Combined", "Waypoints (routes).gpx")); err != nil {
+		if err := rootGpxGaia.Save(filepath.Join(dpath, "GPX Files (For Gaia GPS app)", "Combined", "Waypoints (routes).gpx")); err != nil {
 			return fmt.Errorf("writing waypoints (routes) gpx: %w", err)
 		}
-		for key, paged := range waypointsByKey {
+		for key, paged := range waypointsByKeyGpx {
 			if err := paged.Save(filepath.Join(dpath, "GPX Files (For Gaia GPS app)", "Sections", fmt.Sprintf("GPT%s waypoints.gpx", key.Code()))); err != nil {
 				return fmt.Errorf("writing waypoints by section (%s) gpx: %w", key.Code(), err)
 			}
 		}
+		if err := rootKmlPeakVisor.Save(filepath.Join(dpath, "KMZ Files (For Peak Visor app)", "Combined", "Waypoints (routes).kmz")); err != nil {
+			return fmt.Errorf("writing waypoints (routes) kmz: %w", err)
+		}
+		for key, rootKml := range waypointsByKeyKml {
+			if err := rootKml.Save(filepath.Join(dpath, "KMZ Files (For Peak Visor app)", "Sections", fmt.Sprintf("GPT%s waypoints.kmz", key.Code()))); err != nil {
+				return fmt.Errorf("writing waypoints by section (%s) kmz: %w", key.Code(), err)
+			}
+		}
 	}
 
-	wp := func(waypoints []Waypoint, name string, prefix string) error {
-		root := &gpx.Paged{
+	wp := func(waypoints []Waypoint, name string, prefix string, styleUrl string) error {
+		rootGpxGaia := &gpx.Paged{
 			Max: 1000,
+		}
+		rootKmlPeakVisor := &kml.Root{
+			Xmlns: "http://www.opengis.net/kml/2.2",
+			Document: kml.Document{
+				Name: fmt.Sprintf("%s.kmz"),
+				Folders: []*kml.Folder{
+					{
+						Name: "Points",
+					},
+				},
+				Styles: segmentStyles(),
+			},
 		}
 		for _, w := range waypoints {
 			bucket := &gpx.Bucket{
 				Order: w.Pos.Lat,
 			}
-			bucket.Waypoints = append(bucket.Waypoints, gpx.Waypoint{
-				Point: gpx.PosPoint(w.Pos),
-				Name:  prefix + w.Name,
-			})
-			root.Buckets = append(root.Buckets, bucket)
+			wpName := prefix + w.Name
+			wpPos := w.Pos
+
+			wpGpx := gpx.Waypoint{
+				Point: gpx.PosPoint(wpPos),
+				Name:  wpName,
+			}
+			wpKml := kml.Placemark{
+				Visibility: 1,
+				Open:       0,
+				StyleUrl:   styleUrl,
+				Name:       wpName,
+				Point:      kml.PosPoint(wpPos),
+			}
+
+			bucket.Waypoints = append(bucket.Waypoints, wpGpx)
+			rootGpxGaia.Buckets = append(rootGpxGaia.Buckets, bucket)
+
+			rootKmlPeakVisor.Document.Folders[0].Placemarks = append(rootKmlPeakVisor.Document.Folders[0].Placemarks, &wpKml)
 		}
-		return root.Save(filepath.Join(dpath, "GPX Files (For Gaia GPS app)", name))
+		if err := rootGpxGaia.Save(filepath.Join(dpath, "GPX Files (For Gaia GPS app)", fmt.Sprintf("%s.gpx", name))); err != nil {
+			return fmt.Errorf("writing gpx: %w", err)
+		}
+		if err := rootKmlPeakVisor.Save(filepath.Join(dpath, "KMZ Files (For Peak Visor app)", fmt.Sprintf("%s.kmz", name))); err != nil {
+			return fmt.Errorf("writing kmz: %w", err)
+		}
+		return nil
 	}
-	if err := wp(d.Resupplies, "Waypoints (resupplies).gpx", "Resupply: "); err != nil {
-		return fmt.Errorf("writing resupplies gpx: %w", err)
+	if err := wp(d.Resupplies, "Waypoints (resupplies)", "Resupply: ", "blue"); err != nil {
+		return fmt.Errorf("writing resupplies: %w", err)
 	}
-	if err := wp(d.Important, "Waypoints (important).gpx", "Important: "); err != nil {
-		return fmt.Errorf("writing important gpx: %w", err)
+	if err := wp(d.Important, "Waypoints (important)", "Important: ", "orange"); err != nil {
+		return fmt.Errorf("writing important: %w", err)
 	}
-	if err := wp(d.Geographic, "Waypoints (geographic).gpx", ""); err != nil {
-		return fmt.Errorf("writing important gpx: %w", err)
+	if err := wp(d.Geographic, "Waypoints (geographic)", "", "green"); err != nil {
+		return fmt.Errorf("writing important: %w", err)
 	}
 
 	// areas
@@ -1659,6 +1873,7 @@ func (d *Data) SaveGaia(dpath string) error {
 						Placemarks: areasPlacemarks,
 					},
 				},
+				Styles: segmentStyles(),
 			},
 		}
 		if err := areasKml.Save(filepath.Join(dpath, "GPX Files (For Gaia GPS app)", "Areas.kmz")); err != nil {
@@ -1739,3 +1954,15 @@ func debug(fpath string, name string) {
 		disp("-", folder)
 	}
 }
+
+// Peak Visor
+// Here are the supported colors:
+//"blue" or "teal" or "cyan" will become blue;
+//"gray" || "grey" becomes grey;
+//"brown"
+//"orange"
+//"red"
+//"purple"
+//"green"
+//"yellow" || "lime" will become yellow
+//"pink"

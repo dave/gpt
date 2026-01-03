@@ -38,6 +38,7 @@ func Main() error {
 	single := flag.String("single", "", "only process a single section (for testing)")
 	ele := flag.Bool("ele", true, "lookup elevations")
 	scrape := flag.Bool("scrape", true, "scrape descriptions from wikiexplora")
+	html := flag.Bool("html", true, "save scraped html files as HTML")
 	output := flag.String("output", "./output", "output dir")
 	renames := flag.Bool("renames", false, "create rename log file and RESET legacy names in master file")
 	stamp := flag.String("stamp", fmt.Sprintf("%04d%02d%02d", time.Now().Year(), time.Now().Month(), time.Now().Day()), "date stamp for output files")
@@ -86,6 +87,12 @@ func Main() error {
 	if *scrape {
 		if err := data.Scrape(descriptionsCacheDir); err != nil {
 			return fmt.Errorf("scraping web: %w", err)
+		}
+	}
+
+	if *html {
+		if err := data.ScrapeSaveHTML(*output); err != nil {
+			return fmt.Errorf("saving HTML: %w", err)
 		}
 	}
 

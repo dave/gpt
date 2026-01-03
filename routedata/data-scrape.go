@@ -2,6 +2,7 @@ package routedata
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/dave/gpt/globals"
+	"github.com/go-shiori/obelisk"
 	"golang.org/x/net/html"
 )
 
@@ -21,6 +23,19 @@ const H2_SYMBOL = "★" //"◉" //"✪" //"●" //"★" //"⦿"
 const WAYPOINT_SYMBOL = "☉"
 const ROUTE_SYMBOL = "⬲" //"⛢"
 
+func (d *Data) ScrapeSaveHTML(dpath string) error {
+	logln("saving html")
+	for _, key := range d.Keys {
+		if globals.HAS_SINGLE && key != globals.SINGLE {
+			continue
+		}
+		section := d.Sections[key]
+		if err := section.ScrapeSaveHTML(dpath); err != nil {
+			return fmt.Errorf("scraping saving html GPT%s: %w", section.Key.Code(), err)
+		}
+	}
+	return nil
+}
 func (d *Data) Scrape(cachedir string) error {
 	logln("web scraping")
 	for _, key := range d.Keys {
@@ -32,6 +47,31 @@ func (d *Data) Scrape(cachedir string) error {
 			return fmt.Errorf("scraping GPT%s: %w", section.Key.Code(), err)
 		}
 	}
+	return nil
+}
+
+func (s *Section) ScrapeSaveHTML(dpath string) error {
+	url := fmt.Sprintf("http://www.wikiexplora.com/GPT%s", s.Key.Code())
+
+	// Create archive
+	req := obelisk.Request{
+		URL: url,
+	}
+
+	arc := obelisk.Archiver{EnableLog: false}
+	arc.Validate()
+
+	result, _, err := arc.Archive(context.Background(), req)
+	if err != nil {
+		return fmt.Errorf("obelisk archive GPT%s: %w", s.Key.Code(), err)
+	}
+
+	// Create destination file
+	_ = os.MkdirAll(filepath.Join(dpath, "Scraped (html)"), 0777)
+	if err := os.WriteFile(filepath.Join(dpath, "Scraped (html)", fmt.Sprintf("GPT%v.html", s.Key.Code())), result, 0666); err != nil {
+		return fmt.Errorf("obelisk write file GPT%s: %w", s.Key.Code(), err)
+	}
+
 	return nil
 }
 
